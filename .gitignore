@@ -1,6 +1,7 @@
 node_modules/
 dist/
-Release/
+Release/*
+!Release/Steam Updater.exe
 steam-helper/bin/
 steam-helper/obj/
 MOD_DATA/

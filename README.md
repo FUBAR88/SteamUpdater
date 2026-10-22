@@ -10,15 +10,20 @@ The DayZ Publisher only shows items you authored. A contributor is on the worksh
 
 A contributor push calls the publisher's full update, so the workshop title, description, tags, visibility, preview image, and files go together. Steam still decides whether that account is allowed to change the item. The account has to be logged into the Steam client, own DayZ, and already be a creator or contributor on that workshop item. This tool does not bypass those checks, and it does not build PBO files or BIS keys.
 
+## Just use the app
+
+Download [`Release/Steam Updater.exe`](Release/Steam%20Updater.exe) and run it. It is a portable app, so there is nothing to install. It creates `settings.json` and a `MOD_DATA` folder next to itself.
+
 ## Run the dev tool
 
 Double-click `start-dev.bat`, or from this folder:
 
 ```bat
+npm install
 npm start
 ```
 
-The first start builds the small 32-bit helper, then opens the Steam Updater window.
+`npm install` downloads Electron and the build tools into `node_modules` (only needed once). The first start builds the small 32-bit helper, then opens the Steam Updater window.
 
 ## Build the standalone exe
 
@@ -28,7 +33,7 @@ Double-click `build-exe.bat`, or:
 npm run dist
 ```
 
-That writes a portable app to `Release\Steam Updater.exe`. It is the program itself, not a setup installer. `Release\` is left out of git.
+That writes a portable app to `Release\Steam Updater.exe`. It is the program itself, not a setup installer. Only that exe is kept in git. The rest of `Release\` is build output.
 
 ## What you need
 
