@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
+  <title>Steam Updater</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <header class="brand">
+        <p class="eyebrow">DayZ Workshop</p>
+        <h1>Steam Updater</h1>
+      </header>
+      <input id="mod-search" class="search" type="search" placeholder="Search mods" autocomplete="off">
+      <div class="sidebar-actions">
+        <button id="add-mod" class="icon" type="button" title="Add mod" aria-label="Add mod">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 5h2v14h-2zM5 11h14v2H5z"/></svg>
+        </button>
+        <button id="pull-all" class="icon" type="button" title="Pull" aria-label="Pull">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 3h2v9.2l2.6-2.6 1.4 1.4L12 16l-5-4.99 1.4-1.42L11 12.2V3zM5 18h14v2H5v-2z"/></svg>
+        </button>
+      </div>
+      <div class="filters" role="tablist" aria-label="Owner or contributor">
+        <button id="filter-all" class="icon active" type="button" title="All" aria-label="All">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z"/></svg>
+        </button>
+        <button id="filter-owner" class="icon" type="button" title="Owner" aria-label="Owner">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5z"/></svg>
+        </button>
+        <button id="filter-contributor" class="icon" type="button" title="Contributor" aria-label="Contributor">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm6 1a2.5 2.5 0 1 0-2.5-2.5A2.5 2.5 0 0 0 15 12zM9 13c-3.3 0-6 1.7-6 4v1h8.2a6.4 6.4 0 0 1-.2-1.5A5.4 5.4 0 0 1 12.6 13zm6 .5c-2.5 0-5 1.3-5 3.5V19h10v-2c0-2.2-2.5-3.5-5-3.5z"/></svg>
+        </button>
+      </div>
+      <nav id="mod-list" class="mod-list" aria-label="Mods"></nav>
+      <p class="sidebar-note">Pull loads every mod into this list. Push sends one mod.</p>
+      <footer class="sidebar-foot">
+        <button id="theme-toggle" class="icon" type="button" title="Light" aria-label="Light">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 7a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm0-5h0v2h0V2zm0 18h0v2h0v-2zM4.2 5.6 5.6 4.2l1.4 1.4-1.4 1.4zm12.8 12.8 1.4-1.4 1.4 1.4-1.4 1.4zM2 12h2v0H2zm18 0h2v0h-2zM4.2 18.4l1.4-1.4 1.4 1.4-1.4 1.4zm12.8-12.8 1.4 1.4 1.4-1.4-1.4-1.4z"/></svg>
+        </button>
+        <button id="open-settings" class="icon" type="button" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.8 7.8 0 0 0 .1-1 7.8 7.8 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 2h-6l-.3 2.4a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.8 7.8 0 0 0-.1 1 7.8 7.8 0 0 0 .1 1l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1L9 22h6l.3-2.4a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5z"/></svg>
+        </button>
+      </footer>
+    </aside>
+    <main class="workspace">
+      <section id="empty" class="empty">
+        <h2>No mods yet</h2>
+        <p>Pull loads your Steam mods into this list. Push sends the mod open in the form.</p>
+      </section>
+      <form id="mod-form" class="form" hidden>
+        <div class="form-head">
+          <label class="display-name">
+            <span>Mod name in this app</span>
+            <input id="display-name" type="text" autocomplete="off">
+          </label>
+          <button id="lock-mod" class="switch" type="button" role="switch" aria-checked="false" title="Lock mod update" aria-label="Lock mod update">
+            <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+            <span>Lock mod update</span>
+          </button>
+        </div>
+
+        <section class="panel">
+          <h2>Workshop</h2>
+          <div class="mode" role="radiogroup" aria-label="Upload mode">
+            <label><input type="radio" name="upload-mode" value="normal" checked> Normal</label>
+            <label><input type="radio" name="upload-mode" value="contributor"> Contributor</label>
+          </div>
+          <p id="mode-hint" class="hint"></p>
+          <div class="workshop-layout">
+            <div class="grid">
+              <label class="span-2"><span class="label-line">Title <span class="req" data-for="title">*</span></span><input id="workshop-title" type="text" autocomplete="off"></label>
+              <label class="span-2">Description<textarea id="workshop-description" rows="16"></textarea></label>
+              <label class="span-2">Change note<textarea id="workshop-change-note" rows="3"></textarea></label>
+              <label>Visibility
+                <select id="workshop-visibility">
+                  <option value="public">Public</option>
+                  <option value="friends">Friends only</option>
+                  <option value="private">Private</option>
+                </select>
+              </label>
+              <label>Tags
+                <select id="workshop-tags" multiple size="8">
+                  <optgroup label="Type">
+                    <option>Mod</option>
+                    <option>Server</option>
+                  </optgroup>
+                  <optgroup label="Mod type">
+                    <option>Animation</option>
+                    <option>Character</option>
+                    <option>Economy</option>
+                    <option>Environment</option>
+                    <option>Equipment</option>
+                    <option>Mechanics</option>
+                    <option>Sound</option>
+                    <option>Props</option>
+                    <option>Terrain</option>
+                    <option>Vehicle</option>
+                    <option>Weapon</option>
+                  </optgroup>
+                  <optgroup label="Meta">
+                    <option>Dependency</option>
+                    <option>Collection</option>
+                  </optgroup>
+                  <optgroup label="Publisher">
+                    <option>Weapons</option>
+                    <option>Vehicles</option>
+                    <option>Clothing</option>
+                    <option>Buildings</option>
+                    <option>Food</option>
+                    <option>Medical</option>
+                    <option>Tools</option>
+                    <option>Misc</option>
+                    <option>Book</option>
+                  </optgroup>
+                </select>
+              </label>
+              <label class="span-2"><span class="label-line">Published file id <span class="req" data-for="published">*</span></span><input id="workshop-published-id" type="text" readonly></label>
+            </div>
+            <figure id="preview-pane" class="preview-pane" title="Change preview image">
+              <span class="req" data-for="preview">*</span>
+              <img id="preview-view" alt="Workshop preview">
+              <figcaption id="preview-empty">No preview</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>mod.cpp</h2>
+          <div class="grid">
+            <label>name<input id="mod-name" type="text" autocomplete="off"></label>
+            <label>version<input id="mod-version" type="text" autocomplete="off"></label>
+            <label>author<input id="mod-author" type="text" autocomplete="off"></label>
+            <label>authorID<input id="mod-author-id" type="text" autocomplete="off"></label>
+            <label class="span-2">tooltip<input id="mod-tooltip" type="text" autocomplete="off"></label>
+            <label class="span-2">overview<textarea id="mod-overview" rows="3"></textarea></label>
+            <label class="span-2">action<input id="mod-action" type="text" autocomplete="off"></label>
+            <label class="span-2">picture<input id="mod-picture" type="text" autocomplete="off"></label>
+            <label class="span-2">logo<input id="mod-logo" type="text" autocomplete="off"></label>
+            <label class="span-2">logoSmall<input id="mod-logo-small" type="text" autocomplete="off"></label>
+            <label class="span-2">logoOver<input id="mod-logo-over" type="text" autocomplete="off"></label>
+          </div>
+        </section>
+
+        <div class="commands">
+          <button id="save-mod" class="icon" type="button" title="Save" aria-label="Save">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+          </button>
+          <button id="duplicate-mod" class="icon" type="button" title="Duplicate" aria-label="Duplicate">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
+          </button>
+          <button id="write-files" class="icon action" type="button" title="Write files" aria-label="Write files">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5zM8 12h8v2H8v-2zm0 4h8v2H8v-2z"/></svg>
+          </button>
+          <button id="view-steam" class="icon" type="button" title="View on Steam" aria-label="View on Steam">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 3h7v7h-2V6.4l-9.3 9.3-1.4-1.4L17.6 5H14V3zM5 5h6v2H7v10h10v-4h2v6H5V5z"/></svg>
+          </button>
+          <button id="open-mod-folder" class="icon" type="button" title="Open mod folder" aria-label="Open mod folder">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg>
+          </button>
+          <button id="push-mod" class="icon" type="button" title="Push" aria-label="Push">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 16h2V6.8l2.6 2.6 1.4-1.4L12 3 6.99 8l1.42 1.4L11 6.8V16zM5 18h14v2H5v-2z"/></svg>
+          </button>
+          <button id="delete-mod" class="icon danger" type="button" title="Remove" aria-label="Remove">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2zM4 5h16v2H4V5z"/></svg>
+          </button>
+        </div>
+      </form>
+      <pre id="log" class="log" aria-live="polite"></pre>
+    </main>
+  </div>
+  <div id="settings-modal" class="modal" hidden>
+    <form id="settings-form" class="modal-card">
+      <h2>Settings</h2>
+      <label class="path-field">Data folder
+        <span class="path-row">
+          <input id="settings-data" type="text" autocomplete="off">
+          <button id="settings-data-browse" class="icon" type="button" title="Choose data folder" aria-label="Choose data folder">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg>
+          </button>
+        </span>
+      </label>
+      <label class="path-field">Library file
+        <span class="path-row">
+          <input id="settings-library" type="text" autocomplete="off">
+          <button id="settings-library-browse" class="icon" type="button" title="Choose library file" aria-label="Choose library file">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5z"/></svg>
+          </button>
+        </span>
+      </label>
+      <label class="path-field">Steam folder
+        <span class="path-row">
+          <input id="settings-steam" type="text" autocomplete="off">
+          <button id="settings-steam-browse" class="icon" type="button" title="Choose Steam folder" aria-label="Choose Steam folder">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg>
+          </button>
+        </span>
+      </label>
+      <label class="path-field">DayZ Publisher folder
+        <span class="path-row">
+          <input id="settings-publisher" type="text" autocomplete="off">
+          <button id="settings-publisher-browse" class="icon" type="button" title="Choose DayZ Publisher folder" aria-label="Choose DayZ Publisher folder">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg>
+          </button>
+        </span>
+      </label>
+      <div class="modal-actions">
+        <button id="settings-cancel" class="icon" type="button" title="Cancel" aria-label="Cancel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>
+        </button>
+        <button id="settings-save" class="icon" type="submit" title="Save settings" aria-label="Save settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+        </button>
+      </div>
+    </form>
+  </div>
+  <div id="unlock-modal" class="modal" hidden>
+    <form id="unlock-form" class="modal-card">
+      <h2>Unlock mod</h2>
+      <p>Enter the published file id for <strong id="unlock-name"></strong>.</p>
+      <label>Published file id
+        <input id="unlock-id" type="text" inputmode="numeric" autocomplete="off">
+      </label>
+      <div class="modal-actions">
+        <button id="unlock-cancel" class="icon" type="button" title="Cancel" aria-label="Cancel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>
+        </button>
+        <button id="unlock-save" class="icon" type="submit" title="Unlock" aria-label="Unlock">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+        </button>
+      </div>
+    </form>
+  </div>
+  <div id="splash" class="splash" hidden>
+    <div class="splash-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <h2 id="splash-title">Pulling mods</h2>
+      <p id="splash-status">Starting…</p>
+      <pre id="splash-log"></pre>
+    </div>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

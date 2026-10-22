@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>10</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>SteamHelper</RootNamespace>
+    <AssemblyName>SteamHelper</AssemblyName>
+    <PlatformTarget>x86</PlatformTarget>
+    <Prefer32Bit>true</Prefer32Bit>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <PublisherDir Condition="'$(PublisherDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\DayZ Tools\Bin\Publisher</PublisherDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="SteamLayerWrap">
+      <HintPath>$(PublisherDir)\SteamLayerWrap.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="log4net">
+      <HintPath>$(PublisherDir)\log4net.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Web.Extensions" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="steam_appid.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
