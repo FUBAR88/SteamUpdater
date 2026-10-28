@@ -11,6 +11,28 @@ const daylog = require('./daylog');
 
 let mainWindow = null;
 
+// Nearest folder that exists, walking up from the given path. Empty when none.
+function existingFolder(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return '';
+  }
+  let folder = path.resolve(value.trim());
+  for (;;) {
+    try {
+      if (fs.statSync(folder).isDirectory()) {
+        return folder;
+      }
+    } catch (_error) {
+      // missing, try the parent
+    }
+    const parent = path.dirname(folder);
+    if (parent === folder) {
+      return '';
+    }
+    folder = parent;
+  }
+}
+
 function sendProgress(line) {
   daylog.write(line);
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -155,11 +177,16 @@ app.whenReady().then(() => {
     }
     return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
   });
-  ipcMain.handle('dialog:folder', async (_event, title) => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+  ipcMain.handle('dialog:folder', async (_event, title, startPath) => {
+    const options = {
       title: typeof title === 'string' && title.trim() ? title.trim() : 'Mod content folder',
       properties: ['openDirectory']
-    });
+    };
+    const start = existingFolder(startPath) || existingFolder(settings.get().dataFolder);
+    if (start) {
+      options.defaultPath = start;
+    }
+    const result = await dialog.showOpenDialog(mainWindow, options);
     return result.canceled ? '' : result.filePaths[0];
   });
   ipcMain.handle('dialog:image', async () => {

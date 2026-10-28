@@ -22,8 +22,8 @@ contextBridge.exposeInMainWorld('updater', {
   chooseLibraryFile() {
     return ipcRenderer.invoke('dialog:library');
   },
-  chooseFolder(title) {
-    return ipcRenderer.invoke('dialog:folder', title);
+  chooseFolder(title, startPath) {
+    return ipcRenderer.invoke('dialog:folder', title, startPath);
   },
   chooseImage() {
     return ipcRenderer.invoke('dialog:image');

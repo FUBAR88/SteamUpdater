@@ -857,7 +857,7 @@ document.querySelector('#content-folder-browse').addEventListener('click', async
   if (!mod || busy || mod.locked) {
     return;
   }
-  const folder = await window.updater.chooseFolder('Mod content folder');
+  const folder = await window.updater.chooseFolder('Mod content folder', contentFolder.value);
   if (!folder) {
     return;
   }
@@ -1059,7 +1059,7 @@ document.querySelector('#settings-cancel').addEventListener('click', () => {
 });
 
 document.querySelector('#settings-data-browse').addEventListener('click', async () => {
-  const folder = await window.updater.chooseFolder();
+  const folder = await window.updater.chooseFolder('Data folder', document.querySelector('#settings-data').value);
   if (folder) {
     document.querySelector('#settings-data').value = folder;
   }
@@ -1073,14 +1073,14 @@ document.querySelector('#settings-library-browse').addEventListener('click', asy
 });
 
 document.querySelector('#settings-steam-browse').addEventListener('click', async () => {
-  const folder = await window.updater.chooseFolder('Steam folder');
+  const folder = await window.updater.chooseFolder('Steam folder', document.querySelector('#settings-steam').value);
   if (folder) {
     document.querySelector('#settings-steam').value = folder;
   }
 });
 
 document.querySelector('#settings-publisher-browse').addEventListener('click', async () => {
-  const folder = await window.updater.chooseFolder('DayZ Publisher folder');
+  const folder = await window.updater.chooseFolder('DayZ Publisher folder', document.querySelector('#settings-publisher').value);
   if (folder) {
     document.querySelector('#settings-publisher').value = folder;
   }
