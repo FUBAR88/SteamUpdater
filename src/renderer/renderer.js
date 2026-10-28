@@ -587,7 +587,7 @@ document.querySelector('#write-files').addEventListener('click', async () => {
   setBusy(true);
   try {
     const written = await window.updater.writeFiles(mod);
-    appendLog(`Wrote ${written.modPath}`);
+    appendLog(written.modPath ? `Wrote ${written.modPath}` : 'mod.cpp already matches the form.');
     appendLog(`Wrote ${written.metaPath}`);
     await persist();
   } catch (error) {

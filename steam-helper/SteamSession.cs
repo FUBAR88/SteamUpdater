@@ -149,6 +149,7 @@ namespace SteamHelper
                 }
 
                 WriteMeta(request.contentFolder, publishedId, request.modName);
+                Console.Error.WriteLine("Wrote meta.cpp for " + publishedId.ToString(CultureInfo.InvariantCulture));
                 var descriptor = BuildDescriptor(request, publishedId);
                 var contentOnly = mode == "contributor" && !request.includePage;
                 var published = Submit(publisher, descriptor, publishedId, contentOnly);

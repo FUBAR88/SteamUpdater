@@ -236,9 +236,14 @@ app.whenReady().then(() => {
     if (storedPreview) {
       mod.workshop = { ...mod.workshop, previewImage: storedPreview };
     }
-    const written = files.writeModFiles(mod);
-    sendProgress(`Wrote ${written.modPath}`);
-    sendProgress(`Wrote ${written.metaPath}`);
+    const privateKeys = mod.contentFolder && fs.existsSync(mod.contentFolder) ? files.findPrivateKeys(mod.contentFolder) : [];
+    if (privateKeys.length > 0) {
+      privateKeys.forEach((file) => sendProgress(`Private key in content folder: ${file}`));
+      const blocked = 'Push stopped. Move the .biprivatekey file out of the content folder. Anyone could sign mods as you with it.';
+      sendProgress(blocked);
+      return { ok: false, error: blocked };
+    }
+    sendProgress('The content folder is uploaded as is. meta.cpp is refreshed just before upload.');
     const result = await steam.runHelper(steam.buildRequest('upload', mod), sendProgress, 35 * 60 * 1000);
     if (result && result.ok) {
       sendProgress(`Push finished. Published id ${result.publishedId || publishedId}.`);
@@ -257,7 +262,6 @@ app.whenReady().then(() => {
           previewImage: publishedPreview || (mod.workshop && mod.workshop.previewImage) || ''
         }
       };
-      files.writeModFiles(updated);
       result.mod = updated;
     }
     return result;
