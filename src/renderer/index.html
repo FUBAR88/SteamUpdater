@@ -8,6 +8,25 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="window">
+  <div class="frame">
+  <div class="shell">
+  <header class="titlebar">
+    <span class="titlebar-mark" aria-hidden="true"></span>
+    <span class="titlebar-title">Steam Updater</span>
+    <span class="titlebar-sub">DayZ Workshop</span>
+    <div class="titlebar-controls">
+      <button id="window-minimize" class="window-button" type="button" title="Minimize" aria-label="Minimize">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path fill="currentColor" d="M1 6h10v1H1z"/></svg>
+      </button>
+      <button id="window-maximize" class="window-button" type="button" title="Maximize" aria-label="Maximize">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path fill="none" stroke="currentColor" d="M1.5 1.5h9v9h-9z"/></svg>
+      </button>
+      <button id="window-close" class="window-button close" type="button" title="Close" aria-label="Close">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.2" d="M1.5 1.5l9 9m0-9-9 9"/></svg>
+      </button>
+    </div>
+  </header>
   <div class="app">
     <aside class="sidebar">
       <header class="brand">
@@ -252,6 +271,9 @@
       <p id="splash-status">Starting…</p>
       <pre id="splash-log"></pre>
     </div>
+  </div>
+  </div>
+  </div>
   </div>
   <script src="renderer.js"></script>
 </body>

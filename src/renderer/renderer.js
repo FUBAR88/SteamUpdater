@@ -1086,6 +1086,28 @@ previewPane.addEventListener('click', async () => {
   }
 });
 
+const windowIcons = {
+  maximize: '<svg viewBox="0 0 12 12" aria-hidden="true"><path fill="none" stroke="currentColor" d="M1.5 1.5h9v9h-9z"/></svg>',
+  restore: '<svg viewBox="0 0 12 12" aria-hidden="true"><path fill="none" stroke="currentColor" d="M1.5 3.5h7v7h-7zM3.5 3.5v-2h7v7h-2"/></svg>'
+};
+
+document.querySelector('#window-minimize').addEventListener('click', () => window.updater.windowControl('minimize'));
+document.querySelector('#window-maximize').addEventListener('click', () => window.updater.windowControl('maximize'));
+document.querySelector('#window-close').addEventListener('click', () => window.updater.windowControl('close'));
+document.querySelector('.titlebar').addEventListener('dblclick', (event) => {
+  if (!event.target.closest('.window-button')) {
+    window.updater.windowControl('maximize');
+  }
+});
+window.updater.onWindowState((state) => {
+  const button = document.querySelector('#window-maximize');
+  const label = state.maximized ? 'Restore' : 'Maximize';
+  document.body.classList.toggle('is-maximized', state.maximized);
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.innerHTML = state.maximized ? windowIcons.restore : windowIcons.maximize;
+});
+
 function applyTheme(theme) {
   const next = theme === 'light' ? 'light' : 'neon';
   document.documentElement.dataset.theme = next;

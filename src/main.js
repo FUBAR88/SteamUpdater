@@ -46,8 +46,11 @@ function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 640,
-    backgroundColor: '#061018',
+    // Transparent and frameless: the page draws the window outline itself.
+    backgroundColor: '#00000000',
     title: 'Steam Updater',
+    frame: false,
+    transparent: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -56,6 +59,14 @@ function createWindow() {
     }
   });
   mainWindow.setMenuBarVisibility(false);
+  const sendWindowState = () => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window:state', { maximized: mainWindow.isMaximized() });
+    }
+  };
+  mainWindow.on('maximize', sendWindowState);
+  mainWindow.on('unmaximize', sendWindowState);
+  mainWindow.webContents.on('did-finish-load', sendWindowState);
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event) => event.preventDefault());
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -176,6 +187,23 @@ app.whenReady().then(() => {
       return '';
     }
     return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
+  });
+  // The window has no system frame, so the title bar buttons in the page drive it.
+  ipcMain.handle('window:control', (_event, action) => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    if (action === 'minimize') {
+      mainWindow.minimize();
+    } else if (action === 'maximize') {
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+      } else {
+        mainWindow.maximize();
+      }
+    } else if (action === 'close') {
+      mainWindow.close();
+    }
   });
   ipcMain.handle('dialog:folder', async (_event, title, startPath) => {
     const options = {

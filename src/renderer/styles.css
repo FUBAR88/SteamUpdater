@@ -14,11 +14,27 @@
   --input: #08141c;
   --button: #0e2a38;
   --active: #123044;
+  --titlebar-h: 32px;
+  --win-pad: 8px;
+  --win-cut: 40px;
+  --win-cut-small: 14px;
+  /* Big cuts top-left and bottom-right, small ones on the other corners, notches bottom and left. */
+  --win-shape: polygon(
+    var(--win-cut) 0, calc(100% - var(--win-cut-small)) 0, 100% var(--win-cut-small),
+    100% calc(100% - var(--win-cut)), calc(100% - var(--win-cut)) 100%,
+    66% 100%, calc(66% - 12px) calc(100% - 10px), calc(40% + 12px) calc(100% - 10px), 40% 100%,
+    var(--win-cut-small) 100%, 0 calc(100% - var(--win-cut-small)),
+    0 62%, 8px calc(62% - 10px), 8px calc(38% + 10px), 0 38%,
+    0 var(--win-cut)
+  );
+  --win-edge: #16485c;
+  --win-glow: drop-shadow(0 0 3px rgba(0, 0, 0, 0.45));
   font-family: "Segoe UI", sans-serif;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
+  --win-edge: #b9bec7;
   --bg: #f4f5f7;
   --sidebar: #ffffff;
   --panel: #ffffff;
@@ -43,7 +59,7 @@ html, body {
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
 }
 
@@ -65,10 +81,70 @@ button:disabled { opacity: 0.5; cursor: default; }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 650; }
 button.danger { color: #f0c7be; }
 
+/* The window is transparent. .frame draws its edge and .shell holds the app, both cut to
+   the same shape. transform makes .shell the box that fixed modals position in. */
+.window {
+  position: fixed;
+  inset: var(--win-pad);
+  filter: var(--win-glow);
+}
+.frame {
+  position: absolute;
+  inset: 0;
+  clip-path: var(--win-shape);
+  background: var(--win-edge);
+}
+.shell {
+  position: absolute;
+  inset: 1px;
+  clip-path: var(--win-shape);
+  transform: translateZ(0);
+  overflow: hidden;
+  background: var(--bg);
+}
+body.is-maximized { --win-pad: 0px; --win-glow: none; }
+body.is-maximized .titlebar { padding-left: 14px; }
+body.is-maximized .frame,
+body.is-maximized .shell { clip-path: none; }
+body.is-maximized .shell { inset: 0; }
+
+.titlebar {
+  position: relative;
+  z-index: 40;
+  height: var(--titlebar-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: calc(var(--win-cut) + 6px);
+  background: var(--sidebar);
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.titlebar-mark { width: 10px; height: 10px; background: var(--accent); }
+.titlebar-title { font-size: 12px; font-weight: 650; }
+.titlebar-sub { font-size: 11px; color: var(--muted); }
+.titlebar-controls { margin-left: auto; display: flex; height: 100%; -webkit-app-region: no-drag; }
+.window-button {
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.window-button svg { width: 11px; height: 11px; display: block; }
+.window-button:hover { background: var(--active); color: var(--text); }
+.window-button.close:hover { background: #c42b1c; color: #ffffff; }
+
 .app {
   display: grid;
   grid-template-columns: 420px 1fr;
-  height: 100vh;
+  height: calc(100% - var(--titlebar-h));
   min-height: 0;
 }
 
@@ -77,7 +153,7 @@ button.danger { color: #f0c7be; }
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
   padding: 20px 16px;
@@ -159,7 +235,7 @@ button.icon.primary, #push-mod { color: var(--accent); }
 
 .sidebar-foot { display: flex; gap: 8px; margin-top: 12px; }
 
-.workspace { height: 100vh; min-height: 0; overflow: auto; padding: 24px 28px 40px; }
+.workspace { height: 100%; min-height: 0; overflow: auto; padding: 24px 28px 40px; }
 .empty { max-width: 520px; color: var(--muted); }
 .empty h2 { color: var(--text); }
 
@@ -347,7 +423,7 @@ input[readonly] { color: var(--muted); }
 
 .modal {
   position: fixed;
-  inset: 0;
+  inset: var(--titlebar-h) 0 0;
   display: grid;
   place-items: center;
   background: rgba(0, 0, 0, 0.55);
@@ -367,7 +443,7 @@ input[readonly] { color: var(--muted); }
 
 .splash {
   position: fixed;
-  inset: 0;
+  inset: var(--titlebar-h) 0 0;
   z-index: 20;
   display: grid;
   place-items: center;
@@ -414,4 +490,224 @@ input[readonly] { color: var(--muted); }
   .sidebar { min-height: auto; }
   .grid, .workshop-layout { grid-template-columns: 1fr; }
   .span-2 { grid-column: auto; }
+}
+
+/* Neon theme: hard edges, corner brackets, scanlines. The light theme keeps the plain look. */
+:root[data-theme="neon"] {
+  --bg: #04070c;
+  --sidebar: #060b12;
+  --panel: #08111a;
+  --line: #123a4a;
+  --text: #dff8ff;
+  --muted: #7fa6b5;
+  --accent: #00f0ff;
+  --accent-2: #ff2bd6;
+  --accent-ink: #02080c;
+  --danger: #ff3b6b;
+  --ok: #3dffb0;
+  --input: #050a10;
+  --button: #0a1822;
+  --active: #0d2433;
+  --glow: 0 0 0 1px rgba(0, 240, 255, 0.35), 0 0 14px rgba(0, 240, 255, 0.25);
+  --cut: 10px;
+  --display: "Bahnschrift", "Segoe UI", sans-serif;
+  --mono: "Cascadia Mono", "Consolas", monospace;
+  font-family: var(--display);
+}
+
+/* Four L-shaped corner marks drawn with gradients, so no extra elements are needed. */
+:root[data-theme="neon"] .panel,
+:root[data-theme="neon"] .modal-card,
+:root[data-theme="neon"] .splash-card {
+  border-radius: 0;
+  background:
+    linear-gradient(var(--accent), var(--accent)) top left / 16px 2px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) top left / 2px 16px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) top right / 16px 2px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) top right / 2px 16px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) bottom left / 16px 2px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) bottom left / 2px 16px no-repeat,
+    linear-gradient(var(--accent-2), var(--accent-2)) bottom right / 16px 2px no-repeat,
+    linear-gradient(var(--accent-2), var(--accent-2)) bottom right / 2px 16px no-repeat,
+    linear-gradient(180deg, rgba(0, 240, 255, 0.05), transparent 120px),
+    var(--panel);
+}
+
+:root[data-theme="neon"] .shell {
+  background:
+    linear-gradient(rgba(0, 240, 255, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(0, 240, 255, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
+    radial-gradient(ellipse at 80% 0%, rgba(255, 43, 214, 0.08), transparent 55%),
+    var(--bg);
+}
+:root[data-theme="neon"] .shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px);
+}
+
+:root[data-theme="neon"] .sidebar {
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0.04), transparent 30%), var(--sidebar);
+  box-shadow: inset -1px 0 0 rgba(0, 240, 255, 0.15), 1px 0 18px rgba(0, 240, 255, 0.08);
+}
+
+:root[data-theme="neon"] .eyebrow { color: var(--accent-2); letter-spacing: 0.32em; font-size: 11px; }
+:root[data-theme="neon"] .eyebrow::before { content: "// "; color: var(--accent); }
+:root[data-theme="neon"] h1 {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 25px;
+  text-shadow: -1px 0 rgba(255, 43, 214, 0.75), 1px 0 rgba(0, 240, 255, 0.75), 0 0 18px rgba(0, 240, 255, 0.35);
+}
+:root[data-theme="neon"] h2 {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 15px;
+  color: var(--accent);
+}
+:root[data-theme="neon"] h2::before { content: "\25AE  "; color: var(--accent-2); }
+
+:root[data-theme="neon"] label { letter-spacing: 0.04em; font-size: 12px; }
+:root[data-theme="neon"] .label-line,
+:root[data-theme="neon"] .display-name > span { color: var(--accent); opacity: 0.85; }
+
+:root[data-theme="neon"] input,
+:root[data-theme="neon"] textarea,
+:root[data-theme="neon"] select {
+  border-radius: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  border-left: 2px solid rgba(0, 240, 255, 0.45);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+:root[data-theme="neon"] input:focus,
+:root[data-theme="neon"] textarea:focus,
+:root[data-theme="neon"] select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--glow);
+}
+:root[data-theme="neon"] input::placeholder,
+:root[data-theme="neon"] textarea::placeholder { color: #3f6170; }
+:root[data-theme="neon"] input[type="radio"] { accent-color: var(--accent); width: auto; }
+
+/* Chamfered text buttons: the top-right and bottom-left corners are cut off. */
+:root[data-theme="neon"] button {
+  border-radius: 0;
+  letter-spacing: 0.06em;
+  transition: border-color 0.12s, box-shadow 0.12s, color 0.12s;
+}
+:root[data-theme="neon"] button:not(.icon):not(.mod-select):not(.switch) {
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+  text-transform: uppercase;
+  font-size: 13px;
+  padding: 9px 18px;
+}
+:root[data-theme="neon"] button:not(:disabled):hover { border-color: var(--accent); box-shadow: var(--glow); }
+:root[data-theme="neon"] button.primary { background: var(--accent); color: var(--accent-ink); }
+:root[data-theme="neon"] button.icon { border: 1px solid transparent; }
+:root[data-theme="neon"] button.icon:not(:disabled):hover { background: var(--active); color: var(--accent); }
+:root[data-theme="neon"] .filters button.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+:root[data-theme="neon"] #push-mod { color: var(--accent-2); }
+:root[data-theme="neon"] #push-mod:not(:disabled):hover {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.4), 0 0 14px rgba(255, 43, 214, 0.3);
+}
+
+:root[data-theme="neon"] .mod-row .mod-select {
+  border-radius: 0;
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.04), transparent 60%), var(--button);
+  padding: 9px 12px;
+}
+:root[data-theme="neon"] .mod-row .mod-select:hover { border-color: rgba(0, 240, 255, 0.6); box-shadow: none; }
+:root[data-theme="neon"] .mod-row.active .mod-select {
+  border-color: var(--accent);
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.16), rgba(255, 43, 214, 0.05) 80%), var(--active);
+  box-shadow: inset 3px 0 0 var(--accent), 0 0 12px rgba(0, 240, 255, 0.18);
+}
+:root[data-theme="neon"] .mod-select .name { letter-spacing: 0.03em; }
+:root[data-theme="neon"] .role { text-transform: uppercase; letter-spacing: 0.14em; font-size: 10px; color: var(--accent-2); opacity: 0.85; }
+
+:root[data-theme="neon"] .switch-track,
+:root[data-theme="neon"] .switch-knob { border-radius: 0; }
+:root[data-theme="neon"] .switch:hover { box-shadow: none; }
+:root[data-theme="neon"] .switch.is-on .switch-track { box-shadow: 0 0 12px rgba(0, 240, 255, 0.45); }
+
+:root[data-theme="neon"] .preview-pane,
+:root[data-theme="neon"] .signature-report,
+:root[data-theme="neon"] .steam-item,
+:root[data-theme="neon"] .image-field,
+:root[data-theme="neon"] .splash-card pre { border-radius: 0; }
+:root[data-theme="neon"] .preview-pane { border-style: dashed; }
+:root[data-theme="neon"] .preview-pane:hover { box-shadow: var(--glow); }
+:root[data-theme="neon"] .signature-report { border-left-width: 3px; font-family: var(--mono); }
+:root[data-theme="neon"] .image-field.is-drop-target { outline-color: var(--accent-2); }
+
+:root[data-theme="neon"] .log {
+  border-radius: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  border-left: 3px solid var(--ok);
+  background: linear-gradient(90deg, rgba(61, 255, 176, 0.05), transparent 40%), #03070a;
+  text-shadow: 0 0 6px rgba(61, 255, 176, 0.35);
+}
+
+:root[data-theme="neon"] .spinner {
+  border-radius: 0;
+  border-right-color: var(--accent-2);
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.35);
+}
+
+:root[data-theme="neon"] ::-webkit-scrollbar { width: 8px; height: 8px; }
+:root[data-theme="neon"] ::-webkit-scrollbar-track { background: transparent; }
+:root[data-theme="neon"] ::-webkit-scrollbar-thumb { background: var(--line); border: 1px solid rgba(0, 240, 255, 0.25); }
+:root[data-theme="neon"] ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* Own title bar, the window has no system frame. */
+:root[data-theme="neon"] .titlebar {
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.10), rgba(255, 43, 214, 0.06) 45%, transparent 75%), #03060a;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.45);
+  box-shadow: 0 1px 14px rgba(0, 240, 255, 0.18);
+}
+:root[data-theme="neon"] .titlebar-mark {
+  background: var(--accent);
+  clip-path: polygon(0 0, 100% 0, 100% 60%, 60% 100%, 0 100%);
+  box-shadow: 0 0 10px var(--accent);
+}
+:root[data-theme="neon"] .titlebar-title {
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.55);
+}
+:root[data-theme="neon"] .titlebar-sub {
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  font-size: 10px;
+  color: var(--accent-2);
+}
+:root[data-theme="neon"] .titlebar-sub::before { content: "// "; color: var(--muted); }
+:root[data-theme="neon"] .window-button { color: var(--accent); }
+:root[data-theme="neon"] .window-button:not(:disabled):hover {
+  background: rgba(0, 240, 255, 0.12);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+:root[data-theme="neon"] .window-button.close:not(:disabled):hover {
+  background: rgba(255, 59, 107, 0.22);
+  color: #ffffff;
+  box-shadow: inset 0 -2px 0 var(--danger);
+}
+/* Window outline: glowing cyan to magenta edge around the cut shape. */
+:root[data-theme="neon"] {
+  --win-edge: linear-gradient(135deg, #00f0ff 0%, rgba(0, 240, 255, 0.55) 35%, rgba(255, 43, 214, 0.55) 70%, #ff2bd6 100%);
+  --win-glow: drop-shadow(0 0 4px rgba(0, 240, 255, 0.55)) drop-shadow(0 0 2px rgba(255, 43, 214, 0.4));
 }

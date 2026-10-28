@@ -58,6 +58,14 @@ contextBridge.exposeInMainWorld('updater', {
   writeLog(line) {
     return ipcRenderer.invoke('log:write', line);
   },
+  windowControl(action) {
+    return ipcRenderer.invoke('window:control', action);
+  },
+  onWindowState(callback) {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('window:state', listener);
+    return () => ipcRenderer.removeListener('window:state', listener);
+  },
   onProgress(callback) {
     const listener = (_event, line) => callback(line);
     ipcRenderer.on('steam:progress', listener);
