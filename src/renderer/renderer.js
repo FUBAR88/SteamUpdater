@@ -377,7 +377,6 @@ function applyLock(mod) {
     field.readOnly = locked;
   });
   document.querySelector('#push-mod').disabled = busy || locked;
-  document.querySelector('#write-files').disabled = busy || locked;
   document.querySelector('#save-mod').disabled = busy || locked;
 }
 
@@ -451,7 +450,16 @@ document.querySelector('#save-mod').addEventListener('click', () => {
   mod.draft = false;
   renderList();
   persist()
-    .then(() => appendLog(`Saved ${mod.displayName}.`))
+    .then(async () => {
+      appendLog(`Saved ${mod.displayName}.`);
+      if (!mod.contentFolder) {
+        appendLog('Choose a content folder to write mod.cpp and meta.cpp.');
+        return;
+      }
+      const written = await window.updater.writeFiles(mod);
+      appendLog(written.modPath ? `Wrote ${written.modPath}` : 'mod.cpp already matches the form.');
+      appendLog(`Wrote ${written.metaPath}`);
+    })
     .catch((error) => appendLog(error.message));
 });
 
@@ -573,28 +581,6 @@ document.querySelector('#unlock-form').addEventListener('submit', (event) => {
   persist()
     .then(() => appendLog(`Unlocked ${mod.displayName}.`))
     .catch((error) => appendLog(error.message));
-});
-
-document.querySelector('#write-files').addEventListener('click', async () => {
-  const mod = selected();
-  if (!mod || mod.locked) {
-    if (mod && mod.locked) {
-      appendLog('This mod is locked.');
-    }
-    return;
-  }
-  readForm(mod);
-  setBusy(true);
-  try {
-    const written = await window.updater.writeFiles(mod);
-    appendLog(written.modPath ? `Wrote ${written.modPath}` : 'mod.cpp already matches the form.');
-    appendLog(`Wrote ${written.metaPath}`);
-    await persist();
-  } catch (error) {
-    appendLog(error.message);
-  } finally {
-    setBusy(false);
-  }
 });
 
 async function uploadOne(mod) {

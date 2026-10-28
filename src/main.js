@@ -243,7 +243,9 @@ app.whenReady().then(() => {
       sendProgress(blocked);
       return { ok: false, error: blocked };
     }
-    sendProgress('The content folder is uploaded as is. meta.cpp is refreshed just before upload.');
+    const written = files.writeModFiles(mod);
+    sendProgress(written.modPath ? `Wrote ${written.modPath}` : 'mod.cpp already matches the form.');
+    sendProgress(`Wrote ${written.metaPath}`);
     const result = await steam.runHelper(steam.buildRequest('upload', mod), sendProgress, 35 * 60 * 1000);
     if (result && result.ok) {
       sendProgress(`Push finished. Published id ${result.publishedId || publishedId}.`);
