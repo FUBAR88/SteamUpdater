@@ -43,6 +43,18 @@ contextBridge.exposeInMainWorld('updater', {
   checkSignatures(folder) {
     return ipcRenderer.invoke('files:signatures', folder);
   },
+  folderOf(target) {
+    return ipcRenderer.invoke('files:folder-of', target);
+  },
+  openFolder(folder) {
+    return ipcRenderer.invoke('shell:open-folder', folder);
+  },
+  workshopDetails(publishedId) {
+    return ipcRenderer.invoke('workshop:details', publishedId);
+  },
+  workshopPreview(publishedId, previewUrl) {
+    return ipcRenderer.invoke('workshop:preview', publishedId, previewUrl);
+  },
   pullAll() {
     return ipcRenderer.invoke('steam:pull-all');
   },

@@ -3,5 +3,7 @@
   "libraryFile": "C:\\path\\to\\MOD_DATA\\mods_data.json",
   "theme": "neon",
   "steamDir": "C:\\Program Files (x86)\\Steam",
-  "publisherDir": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\DayZ Tools\\Bin\\Publisher"
+  "publisherDir": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\DayZ Tools\\Bin\\Publisher",
+  "window": { "x": 100, "y": 80, "width": 1480, "height": 900, "maximized": false },
+  "lastModId": ""
 }

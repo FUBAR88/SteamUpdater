@@ -89,11 +89,31 @@ function defaults() {
     libraryFile: path.join(dataFolder, 'mods_data.json'),
     theme: 'neon',
     steamDir,
-    publisherDir: detectPublisherDir(steamDir)
+    publisherDir: detectPublisherDir(steamDir),
+    window: null,
+    lastModId: ''
   };
 }
 
 let current = null;
+
+// Last window position. Anything that is not a full set of numbers is dropped.
+function cleanWindow(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const keys = ['x', 'y', 'width', 'height'];
+  if (!keys.every((key) => Number.isFinite(value[key]))) {
+    return null;
+  }
+  return {
+    x: Math.round(value.x),
+    y: Math.round(value.y),
+    width: Math.round(value.width),
+    height: Math.round(value.height),
+    maximized: Boolean(value.maximized)
+  };
+}
 
 function read() {
   const base = defaults();
@@ -109,7 +129,9 @@ function read() {
       libraryFile: data.libraryFile || base.libraryFile,
       theme: data.theme === 'light' ? 'light' : 'neon',
       steamDir,
-      publisherDir: data.publisherDir || detectPublisherDir(steamDir) || base.publisherDir
+      publisherDir: data.publisherDir || detectPublisherDir(steamDir) || base.publisherDir,
+      window: cleanWindow(data.window),
+      lastModId: typeof data.lastModId === 'string' ? data.lastModId : ''
     };
   } catch (error) {
     return base;
@@ -147,6 +169,8 @@ function update(partial) {
   }
   next.steamDir = String(next.steamDir || '').trim();
   next.publisherDir = String(next.publisherDir || '').trim();
+  next.window = cleanWindow(next.window);
+  next.lastModId = typeof next.lastModId === 'string' ? next.lastModId : '';
   current = next;
   fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
   fs.writeFileSync(settingsFile(), JSON.stringify(next, null, 2), 'utf8');

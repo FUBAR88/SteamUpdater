@@ -127,14 +127,26 @@ function cleanFolderInput(value) {
   return resolved.length > root.length ? resolved.replace(/[\\/]+$/, '') : resolved;
 }
 
-// A .bisign and a .bikey both start with the authority name, ended by a zero byte.
-function readAuthority(file) {
+// A .bisign and a .bikey both start with the authority name, ended by a zero byte,
+// then a 32-bit length and the public key itself. Two keys can share a name, so the
+// key bytes are what tells them apart.
+function readKeyInfo(file) {
   const handle = fs.openSync(file, 'r');
   try {
-    const buffer = Buffer.alloc(512);
+    const buffer = Buffer.alloc(2048);
     const read = fs.readSync(handle, buffer, 0, buffer.length, 0);
     const end = buffer.indexOf(0);
-    return buffer.toString('latin1', 0, end >= 0 && end < read ? end : read).trim();
+    const nameEnd = end >= 0 && end < read ? end : read;
+    const name = buffer.toString('latin1', 0, nameEnd).trim();
+    let publicKey = '';
+    if (nameEnd + 5 <= read) {
+      const length = buffer.readUInt32LE(nameEnd + 1);
+      const start = nameEnd + 5;
+      if (length > 0 && start + length <= read) {
+        publicKey = buffer.toString('hex', start, start + length);
+      }
+    }
+    return { name, publicKey };
   } finally {
     fs.closeSync(handle);
   }
@@ -186,8 +198,7 @@ function checkSignatures(input) {
     .map((name) => path.join(root, name))
     .flatMap((dir) => listFiles(dir, '.bikey'))
     .filter((file, index, all) => all.findIndex((other) => other.toLowerCase() === file.toLowerCase()) === index)
-    .map((file) => ({ file, name: readAuthority(file) }));
-  const keyNames = new Set(keys.map((key) => key.name.toLowerCase()));
+    .map((file) => ({ file, ...readKeyInfo(file) }));
   const bisigns = listFiles(addons, '.bisign');
 
   const pbos = pboFiles.map((file) => {
@@ -196,11 +207,16 @@ function checkSignatures(input) {
     const signatures = bisigns
       .filter((sig) => path.basename(sig).toLowerCase().startsWith(prefix))
       .map((sig) => {
-        const keyName = readAuthority(sig);
+        const info = readKeyInfo(sig);
+        const sameName = keys.filter((key) => key.name.toLowerCase() === info.name.toLowerCase());
+        // An unreadable key body falls back to the name, as before.
+        const match = sameName.find((key) => !key.publicKey || !info.publicKey || key.publicKey === info.publicKey);
         return {
           file: sig,
-          keyName,
-          keyFound: keyNames.has(keyName.toLowerCase()),
+          keyName: info.name,
+          keyFound: Boolean(match),
+          keyFile: match ? match.file : '',
+          nameOnly: !match && sameName.length > 0,
           outdated: fs.statSync(sig).mtimeMs + 2000 < pboTime
         };
       });
@@ -208,11 +224,30 @@ function checkSignatures(input) {
     if (signatures.length === 0) {
       status = 'unsigned';
     } else if (!signatures.some((sig) => sig.keyFound)) {
-      status = keys.length === 0 ? 'no-key' : 'unknown-key';
+      if (keys.length === 0) {
+        status = 'no-key';
+      } else if (signatures.some((sig) => sig.nameOnly)) {
+        status = 'key-mismatch';
+      } else {
+        status = 'unknown-key';
+      }
     } else if (signatures.filter((sig) => sig.keyFound).every((sig) => sig.outdated)) {
       status = 'outdated';
     }
     return { file, name: path.basename(file), status, signatures };
+  });
+
+  // Servers kick on a missing key, and a second key is usually a stale one left
+  // behind after a new key was made. Both are worth a look before a push.
+  const keyIssues = [];
+  if (keys.length > 1) {
+    keyIssues.push(`keys\\ holds ${keys.length} .bikey files. A mod normally ships exactly one.`);
+  }
+  keys.forEach((key) => {
+    const used = pbos.some((pbo) => pbo.signatures.some((sig) => sig.keyFile === key.file));
+    if (!used) {
+      keyIssues.push(`${path.basename(key.file)} signs none of the PBOs.`);
+    }
   });
 
   const signed = pbos.filter((pbo) => pbo.status === 'signed').length;
@@ -220,12 +255,22 @@ function checkSignatures(input) {
     folder,
     root,
     addons,
-    keys,
+    keys: keys.map((key) => ({ file: key.file, name: key.name })),
+    keyIssues,
     pbos,
     signed,
     total: pbos.length,
-    ok: signed === pbos.length
+    ok: signed === pbos.length && keyIssues.length === 0
   };
+}
+
+// A dropped file stands for the folder it is in.
+function folderOf(input) {
+  const target = cleanFolderInput(input);
+  if (!target || !fs.existsSync(target)) {
+    return target;
+  }
+  return fs.statSync(target).isDirectory() ? target : path.dirname(target);
 }
 
 function writeModFiles(mod, options) {
@@ -304,6 +349,7 @@ module.exports = {
   dateTimeToBinaryUtc,
   escapeQuoted,
   findPrivateKeys,
+  folderOf,
   metaName,
   modImagePath,
   publishedIdOrZero,

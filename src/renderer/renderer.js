@@ -34,6 +34,8 @@ let saveTimer = 0;
 let busy = false;
 let roleFilter = 'all';
 let query = '';
+// Mods ticked for Push marked. Kept for this session only.
+const marked = new Set();
 
 function createMod(name) {
   return {
@@ -65,7 +67,9 @@ function createMod(name) {
       version: '1.0.0'
     },
     draft: false,
-    locked: false
+    locked: false,
+    lastPush: null,
+    changeNotes: []
   };
 }
 
@@ -81,8 +85,55 @@ function normalize(mod) {
     workshop: { ...blank.workshop, ...(mod.workshop || {}) },
     modCpp: { ...blank.modCpp, ...(mod.modCpp || {}) },
     draft: Boolean(mod.draft),
-    locked: Boolean(mod.locked)
+    locked: Boolean(mod.locked),
+    lastPush: cleanLastPush(mod.lastPush),
+    changeNotes: Array.isArray(mod.changeNotes) ? mod.changeNotes.map(String).filter(Boolean).slice(0, 10) : []
   };
+}
+
+function cleanLastPush(value) {
+  if (!value || !Number.isFinite(value.at)) {
+    return null;
+  }
+  return { at: value.at, ok: Boolean(value.ok), message: String(value.message || '') };
+}
+
+// Electron wraps errors from the main process in its own prefix.
+function ipcMessage(error) {
+  return String((error && error.message) || error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+}
+
+function timeAgo(at) {
+  const seconds = Math.max(0, (Date.now() - at) / 1000);
+  if (seconds < 60) {
+    return 'just now';
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes} min ago`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours} h ago`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 45) {
+    return days === 1 ? '1 day ago' : `${days} days ago`;
+  }
+  return new Date(at).toLocaleDateString();
+}
+
+function today() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+// The first line a change note gets when none was written: the mod.cpp version and today.
+function changeNoteTemplate(mod) {
+  const version = String((mod && mod.modCpp.version) || '').trim().replace(/^v/i, '');
+  return version ? `v${version} · ${today()}` : today();
 }
 
 function selected() {
@@ -127,6 +178,23 @@ function selectedTags() {
 
 function applyTags(value) {
   const picked = new Set(String(value || '').split(',').map((tag) => tag.trim()).filter(Boolean));
+  // Tags the list does not know get an option, so saving the form keeps them.
+  const known = new Set(Array.from(fields.tags.options).map((option) => option.value));
+  const extra = Array.from(picked).filter((tag) => !known.has(tag));
+  if (extra.length) {
+    let group = fields.tags.querySelector('optgroup[data-extra]');
+    if (!group) {
+      group = document.createElement('optgroup');
+      group.label = 'From the workshop';
+      group.dataset.extra = 'true';
+      fields.tags.appendChild(group);
+    }
+    extra.forEach((tag) => {
+      const option = document.createElement('option');
+      option.textContent = tag;
+      group.appendChild(option);
+    });
+  }
   Array.from(fields.tags.options).forEach((option) => {
     option.selected = picked.has(option.value);
   });
@@ -196,6 +264,7 @@ function fillForm(mod) {
   fields.logoSmall.value = mod.modCpp.logoSmall;
   fields.logoOver.value = mod.modCpp.logoOver;
   applyMode(mod.uploadMode);
+  fillChangeNotes(mod);
   showPreview(mod.workshop.previewImage);
   applyLock(mod);
   if (mod.contentFolder) {
@@ -203,6 +272,26 @@ function fillForm(mod) {
   } else {
     clearSignatureReport();
   }
+}
+
+const recentNotes = document.querySelector('#change-note-recent');
+
+function fillChangeNotes(mod) {
+  fields.changeNote.placeholder = `Empty: the push writes "${changeNoteTemplate(mod)}"`;
+  recentNotes.replaceChildren();
+  const head = document.createElement('option');
+  head.value = '';
+  head.textContent = mod.changeNotes.length ? `Earlier notes (${mod.changeNotes.length})` : 'No earlier notes';
+  recentNotes.appendChild(head);
+  mod.changeNotes.forEach((note, index) => {
+    const option = document.createElement('option');
+    option.value = String(index);
+    const first = note.split(/\r?\n/)[0];
+    option.textContent = first.length > 60 ? `${first.slice(0, 57)}...` : first;
+    option.title = note;
+    recentNotes.appendChild(option);
+  });
+  recentNotes.value = '';
 }
 
 // Strips the quotes Explorer's "Copy as path" adds. The main process resolves the rest.
@@ -219,15 +308,27 @@ const signatureStates = {
   unsigned: 'Not signed',
   outdated: 'Outdated',
   'no-key': 'No .bikey',
-  'unknown-key': 'Wrong key'
+  'unknown-key': 'Wrong key',
+  'key-mismatch': 'Key differs'
 };
 
 const signatureHelp = {
   unsigned: 'no .bisign next to it',
   outdated: 'the .pbo is newer than its .bisign, sign it again',
   'no-key': 'keys\\ holds no .bikey',
-  'unknown-key': 'signed with a key that is not in keys\\'
+  'unknown-key': 'signed with a key that is not in keys\\',
+  'key-mismatch': 'keys\\ has a .bikey with this name, but it is a different key. Ship the .bikey this PBO was signed with'
 };
+
+// One sentence for the push question, from the PBOs and from keys\.
+function signatureProblem(report) {
+  const parts = [];
+  if (report.signed < report.total) {
+    parts.push(`${report.total - report.signed} of ${report.total} PBOs are not signed correctly.`);
+  }
+  (report.keyIssues || []).forEach((issue) => parts.push(issue));
+  return parts.join(' ');
+}
 
 let signatureCheck = 0;
 
@@ -243,9 +344,14 @@ function showSignatureReport(report) {
   signatureReport.className = `signature-report ${report.ok ? 'is-ok' : 'is-bad'}`;
   const summary = document.createElement('p');
   summary.className = 'sig-summary';
-  summary.textContent = report.ok
-    ? `All ${report.total} PBOs are signed.`
-    : `${report.total - report.signed} of ${report.total} PBOs are not signed correctly.`;
+  const keyIssues = report.keyIssues || [];
+  if (report.signed < report.total) {
+    summary.textContent = `${report.total - report.signed} of ${report.total} PBOs are not signed correctly.`;
+  } else if (keyIssues.length) {
+    summary.textContent = `All ${report.total} PBOs are signed, but keys\\ needs a look.`;
+  } else {
+    summary.textContent = `All ${report.total} PBOs are signed with the key in keys\\.`;
+  }
   const keys = document.createElement('p');
   keys.className = 'sig-keys';
   keys.textContent = report.keys.length
@@ -264,7 +370,13 @@ function showSignatureReport(report) {
     item.append(state, name);
     list.appendChild(item);
   });
-  signatureReport.append(summary, keys, list);
+  const issues = keyIssues.map((issue) => {
+    const line = document.createElement('p');
+    line.className = 'sig-key-issue';
+    line.textContent = issue;
+    return line;
+  });
+  signatureReport.append(summary, keys, ...issues, list);
   signatureReport.hidden = false;
 }
 
@@ -307,13 +419,14 @@ async function checkFolder(options) {
     }
     if (!quiet) {
       appendLog(`Signature check ${report.folder}: ${report.signed} of ${report.total} PBOs signed.`);
+      (report.keyIssues || []).forEach((issue) => appendLog(`  ${issue}`));
       report.pbos.filter((pbo) => pbo.status !== 'signed').forEach((pbo) => {
         appendLog(`  ${pbo.name}: ${signatureStates[pbo.status] || pbo.status}, ${signatureHelp[pbo.status] || ''}`);
       });
     }
     return report;
   } catch (error) {
-    const message = String(error.message || error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    const message = ipcMessage(error);
     if (ticket === signatureCheck) {
       showSignatureError(message);
       if (!quiet) {
@@ -371,7 +484,9 @@ function renderList() {
   modList.replaceChildren();
   visibleMods().forEach((mod) => {
     const row = document.createElement('div');
+    const isContributor = roleOf(mod) === 'contributor';
     row.className = mod.id === selectedId ? 'mod-row active' : 'mod-row';
+    row.classList.toggle('contributor', isContributor);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'mod-select';
@@ -379,23 +494,68 @@ function renderList() {
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = mod.displayName || 'Untitled mod';
+    const meta = document.createElement('span');
+    meta.className = 'meta';
     const role = document.createElement('span');
-    role.className = 'role';
-    const roleName = roleOf(mod) === 'contributor' ? 'Contributor' : 'Owner';
+    role.className = isContributor ? 'role contributor' : 'role';
+    const roleName = isContributor ? 'Contributor' : 'Owner';
     role.textContent = mod.locked ? `${roleName} · Locked` : roleName;
-    text.append(name, role);
+    meta.append(role);
+    if (mod.lastPush) {
+      const state = document.createElement('span');
+      state.className = mod.lastPush.ok ? 'push-state ok' : 'push-state bad';
+      const when = new Date(mod.lastPush.at).toLocaleString();
+      state.title = `Last push ${when}: ${mod.lastPush.ok ? 'finished' : 'failed'}. ${mod.lastPush.message}`.trim();
+      state.textContent = timeAgo(mod.lastPush.at);
+      meta.append(state);
+    }
+    text.append(name, meta);
     button.append(text);
     button.addEventListener('click', () => {
       selectMod(mod.id);
     });
-    row.append(button);
+    const tick = document.createElement('input');
+    tick.type = 'checkbox';
+    tick.className = 'mod-mark';
+    tick.checked = marked.has(mod.id);
+    tick.disabled = busy || mod.locked;
+    tick.title = mod.locked ? 'Locked mods are not pushed' : 'Tick for Push marked';
+    tick.setAttribute('aria-label', `Tick ${mod.displayName || 'mod'} for Push marked`);
+    tick.addEventListener('change', () => {
+      if (tick.checked) {
+        marked.add(mod.id);
+      } else {
+        marked.delete(mod.id);
+      }
+      renderMarked();
+    });
+    row.append(tick, button);
     modList.appendChild(row);
   });
+  renderMarked();
   const hasMod = Boolean(selected());
   empty.hidden = hasMod;
   form.hidden = !hasMod;
   document.querySelector('#add-mod').disabled = busy || mods.some((mod) => mod.draft);
   refreshViewSteam();
+}
+
+// Ticked mods that can still be pushed: saved, unlocked and in the library.
+function markedMods() {
+  return savedMods().filter((mod) => marked.has(mod.id) && !mod.locked);
+}
+
+function renderMarked() {
+  const ids = new Set(mods.map((mod) => mod.id));
+  Array.from(marked).forEach((id) => {
+    if (!ids.has(id)) {
+      marked.delete(id);
+    }
+  });
+  const count = markedMods().length;
+  document.querySelector('#marked-count').textContent = String(count);
+  document.querySelector('#push-marked').disabled = busy || count === 0;
+  document.querySelector('#mark-none').hidden = marked.size === 0;
 }
 
 function refreshViewSteam() {
@@ -412,6 +572,7 @@ function setBusy(next) {
   document.querySelector('#add-mod').disabled = next || mods.some((mod) => mod.draft);
   refreshViewSteam();
   applyLock(selected());
+  renderList();
 }
 
 function applyImported(rows) {
@@ -507,6 +668,7 @@ function applyLock(mod) {
   document.querySelector('#push-mod').disabled = busy || locked;
   document.querySelector('#save-mod').disabled = busy || locked;
   document.querySelector('#content-folder-browse').disabled = busy || locked;
+  document.querySelector('#change-note-template').disabled = busy || locked;
   document.querySelectorAll('[data-image-browse]').forEach((button) => {
     button.disabled = busy || locked;
   });
@@ -518,6 +680,7 @@ function queueSave() {
     return;
   }
   readForm(mod);
+  fields.changeNote.placeholder = `Empty: the push writes "${changeNoteTemplate(mod)}"`;
   renderList();
   if (mod.draft) {
     return;
@@ -540,6 +703,7 @@ function selectMod(id) {
   }
   renderList();
   persist().catch((error) => appendLog(error.message));
+  window.updater.saveSettings({ lastModId: id }).catch(() => {});
 }
 
 function describeResult(result) {
@@ -609,6 +773,7 @@ document.querySelector('#duplicate-mod').addEventListener('click', () => {
   copy.id = crypto.randomUUID();
   copy.displayName = `${mod.displayName} copy`;
   copy.locked = false;
+  copy.lastPush = null;
   mods.push(copy);
   selectedId = copy.id;
   fillForm(copy);
@@ -715,29 +880,117 @@ document.querySelector('#unlock-form').addEventListener('submit', (event) => {
     .catch((error) => appendLog(error.message));
 });
 
-async function uploadOne(mod) {
+// Checks and questions before a push. Returns false when the mod should not be
+// pushed. Runs before the splash opens, so its questions stay clickable.
+async function preparePush(mod) {
   if (mod.locked) {
-    appendLog('This mod is locked. Enter its published file id to unlock it.');
-    return;
+    appendLog(`${mod.displayName}: locked. Enter its published file id to unlock it.`);
+    return false;
   }
   if (mod.id === selectedId) {
     readForm(mod);
   }
   const missing = missingRequired(mod);
   if (missing.length) {
-    appendLog(`Push needs ${missing.join(', ')}.`);
+    appendLog(`${mod.displayName}: push needs ${missing.join(', ')}.`);
+    return false;
+  }
+  let report = null;
+  if (mod.id === selectedId) {
+    report = await checkFolder();
+  } else {
+    try {
+      report = await window.updater.checkSignatures(mod.contentFolder);
+    } catch (error) {
+      appendLog(`${mod.displayName}: ${ipcMessage(error)}`);
+    }
+  }
+  if (!report) {
+    appendLog(`${mod.displayName}: push stopped. Fix the content folder first.`);
+    return false;
+  }
+  if (!report.ok && !window.confirm(`${mod.displayName}: ${signatureProblem(report)} Servers that check signatures can kick players. Push anyway?`)) {
+    appendLog(`${mod.displayName}: push cancelled.`);
+    return false;
+  }
+  if (mod.uploadMode === 'contributor') {
+    const choice = await reviewWorkshopPage(mod);
+    if (choice === 'adopt') {
+      appendLog(`${mod.displayName}: took over the workshop page. Check the form and push again.`);
+      return false;
+    }
+    if (choice !== 'push') {
+      appendLog(`${mod.displayName}: push cancelled.`);
+      return false;
+    }
+  }
+  return true;
+}
+
+// A finished push moves its change note to the earlier notes, so the next push
+// starts empty and gets a fresh date.
+function recordPush(mod, ok, message) {
+  mod.lastPush = { at: Date.now(), ok, message: String(message || '').slice(0, 300) };
+  if (!ok) {
     return;
   }
-  if (mod.id === selectedId) {
-    const report = await checkFolder();
-    if (!report) {
-      appendLog('Push stopped. Fix the content folder first.');
-      return;
+  const note = mod.workshop.changeNote.trim();
+  if (note) {
+    mod.changeNotes = [note, ...mod.changeNotes.filter((item) => item !== note)].slice(0, 10);
+    mod.workshop.changeNote = '';
+  }
+}
+
+// Uploads one prepared mod. The splash must already be open.
+async function runPush(mod) {
+  if (!mod.workshop.changeNote.trim()) {
+    mod.workshop.changeNote = changeNoteTemplate(mod);
+    if (mod.id === selectedId) {
+      fields.changeNote.value = mod.workshop.changeNote;
     }
-    if (!report.ok && !window.confirm(`${report.total - report.signed} of ${report.total} PBOs are not signed correctly. Servers that verify signatures will kick players. Push anyway?`)) {
-      appendLog('Push cancelled.');
-      return;
+    appendLog(`${mod.displayName}: change note "${mod.workshop.changeNote}".`);
+  }
+  mod.draft = false;
+  const role = mod.uploadMode === 'contributor' ? 'contributor' : 'owner';
+  const start = `Uploading ${mod.displayName || 'mod'} as ${role}...`;
+  appendLog(start);
+  splashProgress(start);
+  let target = mod;
+  let ok = false;
+  let message = '';
+  try {
+    await persist();
+    const result = await window.updater.upload(mod);
+    if (result.mod) {
+      const index = mods.findIndex((item) => item.id === mod.id);
+      if (index >= 0) {
+        mods[index] = normalize(result.mod);
+        target = mods[index];
+      }
     }
+    ok = Boolean(result.ok);
+    message = describeResult(result);
+  } catch (error) {
+    message = ipcMessage(error);
+  }
+  recordPush(target, ok, message);
+  if (target.id === selectedId) {
+    fillForm(target);
+  }
+  renderList();
+  try {
+    await persist();
+  } catch (error) {
+    appendLog(error.message);
+  }
+  appendLog(message);
+  splashProgress(message);
+  return ok;
+}
+
+async function uploadOne(mod) {
+  if (busy || !(await preparePush(mod))) {
+    return;
   }
   mod.draft = false;
   renderList();
@@ -745,32 +998,285 @@ async function uploadOne(mod) {
   clearTimeout(splashIdle);
   setBusy(true);
   showSplash(`Pushing ${mod.displayName || 'mod'}`);
-  const start = mod.uploadMode === 'contributor' ? 'Uploading as contributor...' : 'Uploading as owner...';
-  appendLog(start);
-  splashProgress(start);
   try {
-    await persist();
-    const result = await window.updater.upload(mod);
-    if (result.mod) {
-      const index = mods.findIndex((item) => item.id === mod.id);
-      mods[index] = normalize(result.mod);
-      selectedId = mods[index].id;
-      fillForm(mods[index]);
-      renderList();
-      await persist();
-    }
-    const summary = describeResult(result);
-    appendLog(summary);
-    splashProgress(summary);
-  } catch (error) {
-    appendLog(error.message);
-    splashProgress(error.message);
+    await runPush(mod);
   } finally {
     pushing = false;
     setBusy(false);
     window.setTimeout(hideSplash, 900);
   }
 }
+
+// Asks every question first, then pushes the ready mods one after another
+// without stopping, so a long batch can run unattended.
+async function pushMarked() {
+  if (busy) {
+    return;
+  }
+  const current = selected();
+  if (current) {
+    readForm(current);
+  }
+  const list = markedMods();
+  const ready = [];
+  for (let index = 0; index < list.length; index += 1) {
+    if (await preparePush(list[index])) {
+      ready.push(list[index]);
+    }
+  }
+  const skipped = list.length - ready.length;
+  if (!ready.length) {
+    appendLog(`Push marked: nothing pushed, ${skipped} skipped.`);
+    return;
+  }
+  pushing = true;
+  clearTimeout(splashIdle);
+  setBusy(true);
+  showSplash(`Pushing ${ready.length} mods`);
+  let done = 0;
+  let failed = 0;
+  try {
+    for (let index = 0; index < ready.length; index += 1) {
+      const mod = ready[index];
+      document.querySelector('#splash-title').textContent = `Pushing ${index + 1} of ${ready.length}: ${mod.displayName || 'mod'}`;
+      if (await runPush(mod)) {
+        done += 1;
+        marked.delete(mod.id);
+      } else {
+        failed += 1;
+      }
+    }
+  } finally {
+    pushing = false;
+    setBusy(false);
+    const summary = `Push marked: ${done} finished, ${failed} failed, ${skipped} skipped.`;
+    appendLog(summary);
+    splashProgress(summary);
+    renderList();
+    window.setTimeout(hideSplash, failed ? 2500 : 900);
+  }
+}
+
+const diffModal = document.querySelector('#diff-modal');
+const visibilityNames = { public: 'Public', friends: 'Friends only', private: 'Private' };
+let diffResolve = null;
+
+function closeDiff(choice) {
+  if (!diffResolve) {
+    return;
+  }
+  const resolve = diffResolve;
+  diffResolve = null;
+  diffModal.hidden = true;
+  resolve(choice);
+}
+
+function normText(value) {
+  return String(value || '').replace(/\r\n?/g, '\n').replace(/\s+$/, '');
+}
+
+function tagKey(value) {
+  return String(value || '').split(',').map((tag) => tag.trim().toLowerCase()).filter(Boolean).sort().join(',');
+}
+
+// Line diff by longest common subsequence. Null when the texts are too long for it.
+function lineDiff(before, after) {
+  const a = normText(before).split('\n');
+  const b = normText(after).split('\n');
+  if (a.length * b.length > 400000) {
+    return null;
+  }
+  const cols = b.length + 1;
+  const table = new Uint32Array((a.length + 1) * cols);
+  for (let i = a.length - 1; i >= 0; i -= 1) {
+    for (let j = b.length - 1; j >= 0; j -= 1) {
+      table[i * cols + j] = a[i] === b[j]
+        ? table[(i + 1) * cols + j + 1] + 1
+        : Math.max(table[(i + 1) * cols + j], table[i * cols + j + 1]);
+    }
+  }
+  const out = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      out.push({ kind: 'same', text: a[i] });
+      i += 1;
+      j += 1;
+    } else if (table[(i + 1) * cols + j] >= table[i * cols + j + 1]) {
+      out.push({ kind: 'del', text: a[i] });
+      i += 1;
+    } else {
+      out.push({ kind: 'add', text: b[j] });
+      j += 1;
+    }
+  }
+  for (; i < a.length; i += 1) {
+    out.push({ kind: 'del', text: a[i] });
+  }
+  for (; j < b.length; j += 1) {
+    out.push({ kind: 'add', text: b[j] });
+  }
+  return out;
+}
+
+// Changed lines with one line of context. Long unchanged stretches fold into a note.
+function renderLineDiff(lines) {
+  const box = document.createElement('pre');
+  box.className = 'diff-lines';
+  const keep = lines.map((line, index) => line.kind !== 'same'
+    || (index > 0 && lines[index - 1].kind !== 'same')
+    || (index < lines.length - 1 && lines[index + 1].kind !== 'same'));
+  let hidden = 0;
+  const flush = () => {
+    if (hidden) {
+      const fold = document.createElement('span');
+      fold.className = 'diff-fold';
+      fold.textContent = `… ${hidden} unchanged line${hidden === 1 ? '' : 's'} …`;
+      box.appendChild(fold);
+      hidden = 0;
+    }
+  };
+  lines.forEach((line, index) => {
+    if (!keep[index]) {
+      hidden += 1;
+      return;
+    }
+    flush();
+    const row = document.createElement('span');
+    row.className = `diff-line ${line.kind}`;
+    const mark = { same: '  ', del: '- ', add: '+ ' }[line.kind];
+    row.textContent = `${mark}${line.text}`;
+    box.appendChild(row);
+  });
+  flush();
+  return box;
+}
+
+function diffPart(label, changed, known) {
+  const part = document.createElement('section');
+  part.className = changed ? 'diff-part changed' : 'diff-part';
+  const head = document.createElement('h3');
+  head.textContent = label;
+  const badge = document.createElement('span');
+  badge.className = 'diff-badge';
+  if (!known) {
+    badge.textContent = 'set by push';
+  } else {
+    badge.textContent = changed ? 'changes' : 'same';
+  }
+  head.appendChild(badge);
+  part.appendChild(head);
+  return part;
+}
+
+function diffValues(part, before, after, known) {
+  if (known) {
+    const old = document.createElement('p');
+    old.className = 'diff-old';
+    old.textContent = before || '(empty)';
+    part.appendChild(old);
+  }
+  const next = document.createElement('p');
+  next.className = 'diff-new';
+  next.textContent = after || '(empty)';
+  part.appendChild(next);
+}
+
+// A contributor push replaces the whole workshop page. Shows the page as it is
+// now next to what the form will put there, and asks how to go on.
+async function reviewWorkshopPage(mod) {
+  const id = String(mod.workshop.publishedId || '').trim();
+  const current = await window.updater.workshopDetails(id).catch((error) => ({ ok: false, error: ipcMessage(error) }));
+  const known = Boolean(current.ok);
+  const body = document.querySelector('#diff-body');
+  body.replaceChildren();
+  const title = mod.workshop.title.trim() || mod.modCpp.name || mod.displayName || '';
+  const visibility = mod.workshop.visibility || 'public';
+  let changes = 0;
+
+  const simple = [
+    ['Title', current.title, title, normText(current.title) !== normText(title)],
+    ['Visibility', visibilityNames[current.visibility] || current.visibility, visibilityNames[visibility] || visibility, current.visibility !== visibility],
+    ['Tags', current.tags, mod.workshop.tags, tagKey(current.tags) !== tagKey(mod.workshop.tags)]
+  ];
+  simple.forEach(([label, before, after, differs]) => {
+    const changed = !known || differs;
+    changes += changed ? 1 : 0;
+    const part = diffPart(label, changed, known);
+    if (changed) {
+      diffValues(part, before, after, known);
+    } else {
+      diffValues(part, '', after, false);
+    }
+    body.appendChild(part);
+  });
+
+  const preview = mod.workshop.previewImage;
+  const previewPart = diffPart('Preview image', Boolean(preview), false);
+  previewPart.querySelector('.diff-badge').textContent = preview ? 'replaced' : 'kept';
+  diffValues(previewPart, '', preview ? `Replaced by ${preview.split(/[\\/]/).pop()}` : 'The form has no preview image, so the workshop keeps its own.', false);
+  body.appendChild(previewPart);
+  changes += preview ? 1 : 0;
+
+  const descriptionChanged = !known || normText(current.description) !== normText(mod.workshop.description);
+  changes += descriptionChanged ? 1 : 0;
+  const descriptionPart = diffPart('Description', descriptionChanged, known);
+  if (known && descriptionChanged) {
+    const lines = lineDiff(current.description, mod.workshop.description);
+    if (lines) {
+      descriptionPart.appendChild(renderLineDiff(lines));
+    } else {
+      diffValues(descriptionPart, current.description, mod.workshop.description, true);
+    }
+  } else {
+    const count = normText(mod.workshop.description).length;
+    diffValues(descriptionPart, '', count ? `${count} characters` : '', false);
+  }
+  body.appendChild(descriptionPart);
+
+  const intro = document.querySelector('#diff-intro');
+  if (known) {
+    intro.textContent = `A contributor push replaces the whole workshop page of "${current.title}" (${id}). ${changes} of 5 parts change. Red is on the workshop now and will be gone, green comes from the form.`;
+  } else {
+    intro.textContent = `${current.error} The push sets the page to the values below. Compare them with the workshop page before you push.`;
+  }
+  document.querySelector('#diff-title').textContent = `Check before push: ${mod.displayName || 'mod'}`;
+  document.querySelector('#diff-adopt').disabled = !known;
+  const choice = await new Promise((resolve) => {
+    diffResolve = resolve;
+    diffModal.hidden = false;
+    document.querySelector('#diff-cancel').focus();
+  });
+  if (choice === 'adopt' && known) {
+    await adoptWorkshopPage(mod, current);
+  }
+  return choice;
+}
+
+async function adoptWorkshopPage(mod, current) {
+  mod.workshop.title = current.title;
+  mod.workshop.description = current.description;
+  mod.workshop.tags = current.tags;
+  mod.workshop.visibility = current.visibility;
+  try {
+    const preview = await window.updater.workshopPreview(mod.workshop.publishedId, current.previewUrl);
+    if (preview) {
+      mod.workshop.previewImage = preview;
+    }
+  } catch (error) {
+    appendLog(ipcMessage(error));
+  }
+  if (mod.id === selectedId) {
+    fillForm(mod);
+  }
+  renderList();
+  persist().catch((error) => appendLog(error.message));
+}
+
+document.querySelector('#diff-cancel').addEventListener('click', () => closeDiff('cancel'));
+document.querySelector('#diff-adopt').addEventListener('click', () => closeDiff('adopt'));
+document.querySelector('#diff-push').addEventListener('click', () => closeDiff('push'));
 
 const splash = document.querySelector('#splash');
 const splashStatus = document.querySelector('#splash-status');
@@ -867,6 +1373,125 @@ document.querySelector('#content-folder-browse').addEventListener('click', async
   contentFolder.value = folder;
   queueSave();
   checkFolder();
+});
+
+document.querySelector('#content-folder-open').addEventListener('click', () => {
+  const folder = cleanPath(contentFolder.value);
+  if (!folder) {
+    appendLog('Enter or paste a mod folder path first.');
+    return;
+  }
+  window.updater.openFolder(folder)
+    .then((opened) => appendLog(`Opened ${opened}`))
+    .catch((error) => appendLog(ipcMessage(error)));
+});
+
+// A folder dropped on the content folder box becomes the content folder. A dropped
+// file stands for the folder it is in.
+const contentFolderBox = document.querySelector('#content-folder-box');
+contentFolderBox.addEventListener('dragover', (event) => {
+  event.preventDefault();
+  const mod = selected();
+  const allowed = Boolean(mod && !busy && !mod.locked);
+  event.dataTransfer.dropEffect = allowed ? 'copy' : 'none';
+  contentFolderBox.classList.toggle('is-drop-target', allowed);
+});
+contentFolderBox.addEventListener('dragleave', (event) => {
+  if (!contentFolderBox.contains(event.relatedTarget)) {
+    contentFolderBox.classList.remove('is-drop-target');
+  }
+});
+contentFolderBox.addEventListener('drop', async (event) => {
+  event.preventDefault();
+  contentFolderBox.classList.remove('is-drop-target');
+  const mod = selected();
+  const dropped = event.dataTransfer.files[0];
+  if (!mod || busy || mod.locked || !dropped) {
+    return;
+  }
+  try {
+    contentFolder.value = await window.updater.folderOf(window.updater.pathForFile(dropped));
+    queueSave();
+    checkFolder();
+  } catch (error) {
+    appendLog(ipcMessage(error));
+  }
+});
+
+document.querySelector('#change-note-template').addEventListener('click', () => {
+  const mod = selected();
+  if (!mod || busy || mod.locked) {
+    return;
+  }
+  const line = changeNoteTemplate(mod);
+  const text = fields.changeNote.value;
+  if (!text.trim()) {
+    fields.changeNote.value = `${line}\n- `;
+  } else if (!text.startsWith(line)) {
+    fields.changeNote.value = `${line}\n${text}`;
+  }
+  fields.changeNote.focus();
+  fields.changeNote.setSelectionRange(fields.changeNote.value.length, fields.changeNote.value.length);
+  queueSave();
+});
+
+recentNotes.addEventListener('change', () => {
+  const mod = selected();
+  const picked = recentNotes.value;
+  recentNotes.value = '';
+  if (!mod || busy || mod.locked || picked === '') {
+    return;
+  }
+  fields.changeNote.value = mod.changeNotes[Number(picked)] || '';
+  queueSave();
+});
+
+document.querySelector('#push-marked').addEventListener('click', () => {
+  pushMarked();
+});
+
+document.querySelector('#mark-none').addEventListener('click', () => {
+  marked.clear();
+  renderList();
+});
+
+function anyModalOpen() {
+  return Array.from(document.querySelectorAll('.modal')).some((modal) => !modal.hidden) || !splash.hidden;
+}
+
+// Ctrl+S saves, Ctrl+Enter pushes, Ctrl+F finds a mod, Esc closes a dialog.
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    if (!diffModal.hidden) {
+      closeDiff('cancel');
+    } else if (!document.querySelector('#unlock-modal').hidden) {
+      document.querySelector('#unlock-cancel').click();
+    } else if (!settingsModal.hidden) {
+      settingsModal.hidden = true;
+    }
+    return;
+  }
+  if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
+    return;
+  }
+  const key = event.key.toLowerCase();
+  if (key !== 's' && key !== 'f' && key !== 'enter') {
+    return;
+  }
+  event.preventDefault();
+  if (anyModalOpen()) {
+    return;
+  }
+  if (key === 'f') {
+    const search = document.querySelector('#mod-search');
+    search.focus();
+    search.select();
+    return;
+  }
+  const button = document.querySelector(key === 's' ? '#save-mod' : '#push-mod');
+  if (!form.hidden && !button.disabled) {
+    button.click();
+  }
 });
 
 // Turns a chosen or dropped image file into the in-PBO path that mod.cpp wants.
@@ -1193,9 +1818,15 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
 
 window.updater.getSettings().then((current) => {
   applyTheme(current.theme);
-}).catch((error) => appendLog(error.message));
-
-loadLibrary().catch((error) => {
+  selectedId = current.lastModId || '';
+}).catch((error) => appendLog(error.message)).then(() => loadLibrary()).catch((error) => {
   appendLog(error.message);
   renderList();
 });
+
+// Keeps "2 h ago" in the list current.
+window.setInterval(() => {
+  if (!busy) {
+    renderList();
+  }
+}, 60000);

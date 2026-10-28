@@ -45,21 +45,42 @@ That writes a portable app to `Release\Steam Updater.exe`. It is the program its
 
 ## Content folder and signature check
 
-Every mod has a **Content folder** field in the Workshop panel. Paste a path (quotes from Explorer's "Copy as path" are removed), type one and press Enter, or pick it with the folder button. The mod folder (`@MyMod`), its `addons` folder, or any folder with `.pbo` files works.
+Every mod has a **Content folder** field in the Workshop panel. Paste a path (quotes from Explorer's "Copy as path" are removed), type one and press Enter, pick it with the folder button, or drop the folder on the field. A dropped file counts as the folder it is in. The mod folder (`@MyMod`), its `addons` folder, or any folder with `.pbo` files works. The arrow button opens the folder in Explorer.
 
 The shield button checks every `.pbo`:
 
 - **Signed**: a `.bisign` next to it, made with a key that is in the mod's `keys\` folder
 - **Not signed**: no `.bisign`
 - **Wrong key**: the `.bisign` names a key that is not in `keys\`
+- **Key differs**: `keys\` has a `.bikey` with the same name, but it is a different key. This happens when a key is made again under the old name.
 - **No .bikey**: there is no `.bikey` in `keys\`
 - **Outdated**: the `.pbo` is newer than its `.bisign`, so it was rebuilt after signing
 
-The check reads the key name from the files. It does not recompute the signature hashes. Push runs the check again and asks before it uploads PBOs that are not signed correctly.
+It also looks at `keys\` itself: more than one `.bikey`, or a `.bikey` that signs none of the PBOs, is reported.
+
+The check compares the public key stored in each `.bisign` with the one in each `.bikey`. It does not recompute the signature hashes. Push runs the check again and asks before it uploads when a PBO is not signed correctly or `keys\` needs a look.
+
+## Pushing
+
+- **Check before push**: a contributor push replaces the whole workshop page. Before it starts, the app reads the page from Steam and shows what changes: title, visibility, tags, preview image, and the description line by line. **Push** goes on, **Use workshop text** copies the page from Steam into the form and stops, **Cancel** stops. Steam only shows public items to this lookup. For private and friends-only items the dialog lists what the push will set.
+- **Push marked**: tick mods in the list and press **Push marked**. All questions come first, then the mods are pushed one after another. Mods that finish lose their tick, failed ones keep it.
+- **Last push**: each mod in the list shows when it was last pushed, with a green dot when it finished and a red one when it failed. Hover it for the time and the message.
+- **Change note**: left empty, the push writes the `mod.cpp` version and today's date. The calendar button puts that line into the field. After a push the note moves to **Earlier notes**, from where it can be picked again.
+
+## Keyboard
+
+| Keys | Does |
+| --- | --- |
+| Ctrl+S | Save |
+| Ctrl+Enter | Push the open mod |
+| Ctrl+F | Search the mod list |
+| Esc | Close a dialog |
+
+The window opens where it was closed, with the mod that was open last.
 
 ## Local data
 
-Mods, preview images, logs, and `settings.json` stay on this machine. They are gitignored. The first launch creates `settings.json` next to the app and a `MOD_DATA` folder for the library. `settings.example.json` shows the shape of that file. `theme` is `neon` or `light`.
+Mods, preview images, logs, and `settings.json` stay on this machine. They are gitignored. The first launch creates `settings.json` next to the app and a `MOD_DATA` folder for the library. `settings.example.json` shows the shape of that file. `theme` is `neon` or `light`. `window` and `lastModId` are written by the app when it closes and when a mod is opened.
 
 `steamDir` is the folder that contains `steam.exe`. `publisherDir` is the DayZ Publisher folder that contains `SteamLayerWrap.dll`. Both are filled in from the Steam registry and your Steam libraries. Change them in Settings if the detected folders are wrong. A path you save is kept.
 

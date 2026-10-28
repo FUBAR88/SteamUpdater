@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, screen, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const library = require('./library');
@@ -40,10 +40,40 @@ function sendProgress(line) {
   }
 }
 
+// The saved position only counts while enough of it is still on a screen, so a
+// window from an unplugged monitor does not open out of reach.
+function savedBounds() {
+  const saved = settings.get().window;
+  if (!saved) {
+    return null;
+  }
+  const visible = screen.getAllDisplays().some((display) => {
+    const area = display.workArea;
+    const width = Math.min(saved.x + saved.width, area.x + area.width) - Math.max(saved.x, area.x);
+    const height = Math.min(saved.y + saved.height, area.y + area.height) - Math.max(saved.y, area.y);
+    return width >= 200 && height >= 100;
+  });
+  return visible ? saved : null;
+}
+
+function rememberBounds() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  try {
+    settings.update({ window: { ...mainWindow.getNormalBounds(), maximized: mainWindow.isMaximized() } });
+  } catch (error) {
+    daylog.write(`Could not save the window position. ${error.message}`);
+  }
+}
+
 function createWindow() {
+  const bounds = savedBounds();
+  const placement = bounds
+    ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+    : { width: 1480, height: 900 };
   mainWindow = new BrowserWindow({
-    width: 1480,
-    height: 900,
+    ...placement,
     minWidth: 1100,
     minHeight: 640,
     // Transparent and frameless: the page draws the window outline itself.
@@ -59,6 +89,10 @@ function createWindow() {
     }
   });
   mainWindow.setMenuBarVisibility(false);
+  if (bounds && bounds.maximized) {
+    mainWindow.maximize();
+  }
+  mainWindow.on('close', rememberBounds);
   const sendWindowState = () => {
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('window:state', { maximized: mainWindow.isMaximized() });
@@ -277,6 +311,49 @@ app.whenReady().then(() => {
   ipcMain.handle('files:write', (_event, mod) => files.writeModFiles(mod));
   ipcMain.handle('files:mod-image-path', (_event, file, folder) => files.modImagePath(file, folder));
   ipcMain.handle('files:signatures', (_event, folder) => files.checkSignatures(folder));
+  ipcMain.handle('files:folder-of', (_event, target) => files.folderOf(target));
+  ipcMain.handle('shell:open-folder', async (_event, folder) => {
+    const target = files.cleanFolderInput(folder);
+    if (!target || !fs.existsSync(target) || !fs.statSync(target).isDirectory()) {
+      throw new Error(`Folder not found: ${target || '(empty)'}`);
+    }
+    const error = await shell.openPath(target);
+    if (error) {
+      throw new Error(error);
+    }
+    return target;
+  });
+  // What the workshop page shows right now, to compare with the form before a push
+  // overwrites it. Steam's public lookup only answers for public items.
+  ipcMain.handle('workshop:details', async (_event, publishedId) => {
+    const id = String(publishedId || '').trim();
+    if (!/^\d+$/.test(id)) {
+      return { ok: false, error: 'No published file id.' };
+    }
+    try {
+      const detail = (await images.fetchDetails([id]))[0] || {};
+      if (detail.result !== 1) {
+        return { ok: false, error: 'Steam does not show this item publicly (private, friends only, or removed), so the current page cannot be read.' };
+      }
+      const visibility = { 0: 'public', 1: 'friends', 2: 'private' }[detail.visibility] || 'public';
+      const tags = Array.isArray(detail.tags) ? detail.tags.map((tag) => (tag && tag.tag) || tag).filter(Boolean) : [];
+      return {
+        ok: true,
+        title: detail.title || '',
+        description: detail.description || '',
+        tags: tags.join(', '),
+        visibility,
+        previewUrl: detail.preview_url || '',
+        updated: detail.time_updated ? detail.time_updated * 1000 : 0
+      };
+    } catch (error) {
+      return { ok: false, error: `Could not read the workshop page. ${error.message}` };
+    }
+  });
+  ipcMain.handle('workshop:preview', async (_event, publishedId, previewUrl) => {
+    const file = await images.downloadPreview(publishedId, previewUrl);
+    return file || images.findPreview(publishedId);
+  });
   ipcMain.handle('log:write', (_event, line) => {
     daylog.write(line);
     return true;
