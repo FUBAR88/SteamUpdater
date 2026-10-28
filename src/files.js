@@ -252,6 +252,51 @@ function writeModFiles(mod, options) {
   return { folder, modPath: modChanged ? modPath : '', metaPath };
 }
 
+// Reads the prefix from a $PBOPREFIX$ file: a bare path or "prefix=path".
+function readPboPrefix(file) {
+  const line = fs.readFileSync(file, 'utf8').split(/\r?\n/).map((text) => text.trim()).find(Boolean) || '';
+  return line.replace(/^prefix\s*=\s*/i, '').replace(/[\\/]+/g, '\\').replace(/^\\+|\\+$/g, '');
+}
+
+function isInside(folder, file) {
+  const relative = path.relative(folder, file);
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+// mod.cpp wants an image path as the game sees it inside the PBO. Works it out from
+// the $PBOPREFIX$ of the source folder, the P: drive, or the content folder.
+function modImagePath(file, contentFolder) {
+  const full = path.resolve(String(file || ''));
+  let folder = path.dirname(full);
+  for (;;) {
+    for (const name of ['$PBOPREFIX$', '$PBOPREFIX$.txt', '$PREFIX$']) {
+      const marker = path.join(folder, name);
+      if (fs.existsSync(marker) && fs.statSync(marker).isFile()) {
+        const prefix = readPboPrefix(marker);
+        const relative = path.relative(folder, full);
+        return { value: prefix ? `${prefix}\\${relative}` : relative, source: 'prefix' };
+      }
+    }
+    const parent = path.dirname(folder);
+    if (parent === folder) {
+      break;
+    }
+    folder = parent;
+  }
+  const root = path.parse(full).root;
+  if (/^p:\\$/i.test(root)) {
+    return { value: full.slice(root.length), source: 'p-drive' };
+  }
+  const content = cleanFolderInput(contentFolder);
+  if (content) {
+    const modRoot = locateModParts(content).root;
+    if (isInside(modRoot, full)) {
+      return { value: path.relative(modRoot, full), source: 'content-folder' };
+    }
+  }
+  return { value: full, source: 'absolute' };
+}
+
 module.exports = {
   MOD_FIELDS,
   checkSignatures,
@@ -260,6 +305,7 @@ module.exports = {
   escapeQuoted,
   findPrivateKeys,
   metaName,
+  modImagePath,
   publishedIdOrZero,
   writeModFiles
 };

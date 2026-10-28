@@ -507,6 +507,9 @@ function applyLock(mod) {
   document.querySelector('#push-mod').disabled = busy || locked;
   document.querySelector('#save-mod').disabled = busy || locked;
   document.querySelector('#content-folder-browse').disabled = busy || locked;
+  document.querySelectorAll('[data-image-browse]').forEach((button) => {
+    button.disabled = busy || locked;
+  });
 }
 
 function queueSave() {
@@ -865,6 +868,67 @@ document.querySelector('#content-folder-browse').addEventListener('click', async
   queueSave();
   checkFolder();
 });
+
+// Turns a chosen or dropped image file into the in-PBO path that mod.cpp wants.
+async function setModImage(key, file) {
+  const mod = selected();
+  if (!mod || busy || mod.locked || !file) {
+    return;
+  }
+  // The game only loads its own texture formats. PNG, JPG and TGA need converting first.
+  if (!/\.(paa|edds)$/i.test(file)) {
+    appendLog(`${key}: only .paa and .edds work in DayZ. Convert ${file} first, e.g. with ImageToPAA from DayZ Tools.`);
+    return;
+  }
+  try {
+    const result = await window.updater.modImagePath(file, contentFolder.value);
+    fields[key].value = result.value;
+    queueSave();
+    if (result.source === 'content-folder') {
+      appendLog(`${key}: ${result.value} is relative to the content folder. Check that it matches the path inside your PBO.`);
+    } else if (result.source === 'absolute') {
+      appendLog(`${key}: ${file} is not in a PBO source folder ($PBOPREFIX$), on P:\\ or in the content folder. Change it to the path inside your PBO.`);
+    }
+  } catch (error) {
+    appendLog(error.message);
+  }
+}
+
+document.querySelectorAll('[data-image-browse]').forEach((button) => {
+  button.addEventListener('click', async () => {
+    const key = button.dataset.imageBrowse;
+    const file = await window.updater.chooseModImage(`${key} image`, contentFolder.value);
+    setModImage(key, file);
+  });
+});
+
+document.querySelectorAll('[data-image-field]').forEach((box) => {
+  const key = box.dataset.imageField;
+  box.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    const mod = selected();
+    const allowed = Boolean(mod && !busy && !mod.locked);
+    event.dataTransfer.dropEffect = allowed ? 'copy' : 'none';
+    box.classList.toggle('is-drop-target', allowed);
+  });
+  box.addEventListener('dragleave', (event) => {
+    if (!box.contains(event.relatedTarget)) {
+      box.classList.remove('is-drop-target');
+    }
+  });
+  box.addEventListener('drop', (event) => {
+    event.preventDefault();
+    box.classList.remove('is-drop-target');
+    const dropped = event.dataTransfer.files[0];
+    if (dropped) {
+      setModImage(key, window.updater.pathForFile(dropped));
+    }
+  });
+});
+
+// A file dropped anywhere else would make the window navigate to it.
+document.addEventListener('dragover', (event) => event.preventDefault());
+document.addEventListener('drop', (event) => event.preventDefault());
 
 form.addEventListener('input', queueSave);
 form.addEventListener('change', (event) => {

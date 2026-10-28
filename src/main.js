@@ -199,6 +199,21 @@ app.whenReady().then(() => {
     });
     return result.canceled ? '' : result.filePaths[0];
   });
+  ipcMain.handle('dialog:mod-image', async (_event, title, startPath) => {
+    const options = {
+      title: typeof title === 'string' && title.trim() ? title.trim() : 'mod.cpp image',
+      properties: ['openFile'],
+      filters: [
+        { name: 'DayZ textures', extensions: ['paa', 'edds'] }
+      ]
+    };
+    const start = existingFolder(startPath) || existingFolder(settings.get().dataFolder);
+    if (start) {
+      options.defaultPath = start;
+    }
+    const result = await dialog.showOpenDialog(mainWindow, options);
+    return result.canceled ? '' : result.filePaths[0];
+  });
   ipcMain.handle('dialog:library', async () => {
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Library file',
@@ -232,6 +247,7 @@ app.whenReady().then(() => {
     return shell.openExternal(target);
   });
   ipcMain.handle('files:write', (_event, mod) => files.writeModFiles(mod));
+  ipcMain.handle('files:mod-image-path', (_event, file, folder) => files.modImagePath(file, folder));
   ipcMain.handle('files:signatures', (_event, folder) => files.checkSignatures(folder));
   ipcMain.handle('log:write', (_event, line) => {
     daylog.write(line);

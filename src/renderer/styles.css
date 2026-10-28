@@ -223,6 +223,10 @@ button.icon.primary, #push-mod { color: var(--accent); }
 
 .span-2 { grid-column: 1 / -1; }
 
+.field-hint { font-size: 12px; color: var(--muted); opacity: 0.85; }
+.image-field { display: flex; flex-direction: column; gap: 6px; border-radius: 6px; }
+.image-field.is-drop-target { outline: 2px dashed var(--accent); outline-offset: 4px; }
+
 label {
   display: flex;
   flex-direction: column;

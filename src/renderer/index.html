@@ -143,18 +143,19 @@
 
         <section class="panel">
           <h2>mod.cpp</h2>
+          <p class="hint">DayZ reads mod.cpp from the mod folder and shows it in the launcher and the in-game mods list. Only name is really needed. Fields you leave empty are not added to the file.</p>
           <div class="grid">
-            <label>name<input id="mod-name" type="text" autocomplete="off"></label>
-            <label>version<input id="mod-version" type="text" autocomplete="off"></label>
-            <label>author<input id="mod-author" type="text" autocomplete="off"></label>
-            <label>authorID<input id="mod-author-id" type="text" autocomplete="off"></label>
-            <label class="span-2">tooltip<input id="mod-tooltip" type="text" autocomplete="off"></label>
-            <label class="span-2">overview<textarea id="mod-overview" rows="3"></textarea></label>
-            <label class="span-2">action<input id="mod-action" type="text" autocomplete="off"></label>
-            <label class="span-2">picture<input id="mod-picture" type="text" autocomplete="off"></label>
-            <label class="span-2">logo<input id="mod-logo" type="text" autocomplete="off"></label>
-            <label class="span-2">logoSmall<input id="mod-logo-small" type="text" autocomplete="off"></label>
-            <label class="span-2">logoOver<input id="mod-logo-over" type="text" autocomplete="off"></label>
+            <label><span class="label-line">name</span><input id="mod-name" type="text" autocomplete="off" placeholder="e.g. My Mod"><span class="field-hint">Mod name in the DayZ launcher and the in-game mods list.</span></label>
+            <label><span class="label-line">version</span><input id="mod-version" type="text" autocomplete="off" placeholder="e.g. 1.0.0"><span class="field-hint">Version shown next to the name.</span></label>
+            <label><span class="label-line">author</span><input id="mod-author" type="text" autocomplete="off" placeholder="e.g. Psyern"><span class="field-hint">Your name or team, shown as the author.</span></label>
+            <label><span class="label-line">authorID</span><input id="mod-author-id" type="text" autocomplete="off" placeholder="e.g. 76561198000000000"><span class="field-hint">Your Steam64 ID (17 digits). Can stay empty.</span></label>
+            <label class="span-2"><span class="label-line">tooltip</span><input id="mod-tooltip" type="text" autocomplete="off" placeholder="e.g. Adds new weapons"><span class="field-hint">Short text when the mouse is over the mod in the mods list.</span></label>
+            <label class="span-2"><span class="label-line">overview</span><textarea id="mod-overview" rows="3" placeholder="What the mod does, in a sentence or two"></textarea><span class="field-hint">Longer description in the mod details.</span></label>
+            <label class="span-2"><span class="label-line">action</span><input id="mod-action" type="text" autocomplete="off" placeholder="e.g. https://discord.gg/yourserver"><span class="field-hint">Link opened from the mod details, e.g. your Discord or website. Can stay empty.</span></label>
+            <div class="span-2 image-field" data-image-field="picture"><label class="path-field" for="mod-picture"><span class="label-line">picture</span></label><span class="path-row"><input id="mod-picture" type="text" autocomplete="off" placeholder="e.g. MyMod\data\picture.edds"><button class="icon" type="button" data-image-browse="picture" title="Choose picture image" aria-label="Choose picture image"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg></button></span><span class="field-hint">Large image in the mod details. Path inside your PBO. Drop a .paa or .edds here or use the folder button. Can stay empty.</span></div>
+            <div class="span-2 image-field" data-image-field="logo"><label class="path-field" for="mod-logo"><span class="label-line">logo</span></label><span class="path-row"><input id="mod-logo" type="text" autocomplete="off" placeholder="e.g. MyMod\data\logo.edds"><button class="icon" type="button" data-image-browse="logo" title="Choose logo image" aria-label="Choose logo image"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg></button></span><span class="field-hint">Logo in the mods list. Path inside your PBO. Drop a .paa or .edds here or use the folder button. Can stay empty.</span></div>
+            <div class="span-2 image-field" data-image-field="logoSmall"><label class="path-field" for="mod-logo-small"><span class="label-line">logoSmall</span></label><span class="path-row"><input id="mod-logo-small" type="text" autocomplete="off" placeholder="e.g. MyMod\data\logo_small.edds"><button class="icon" type="button" data-image-browse="logoSmall" title="Choose logoSmall image" aria-label="Choose logoSmall image"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg></button></span><span class="field-hint">Small icon next to the mod name. Path inside your PBO. Drop a .paa or .edds here or use the folder button. Can stay empty.</span></div>
+            <div class="span-2 image-field" data-image-field="logoOver"><label class="path-field" for="mod-logo-over"><span class="label-line">logoOver</span></label><span class="path-row"><input id="mod-logo-over" type="text" autocomplete="off" placeholder="e.g. MyMod\data\logo_over.edds"><button class="icon" type="button" data-image-browse="logoOver" title="Choose logoOver image" aria-label="Choose logoOver image"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg></button></span><span class="field-hint">Logo shown while the mouse is over it. Path inside your PBO. Drop a .paa or .edds here or use the folder button. Can stay empty.</span></div>
           </div>
         </section>
 

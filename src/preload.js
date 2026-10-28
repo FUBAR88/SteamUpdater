@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('updater', {
   getLibrary() {
@@ -24,6 +24,15 @@ contextBridge.exposeInMainWorld('updater', {
   },
   chooseFolder(title, startPath) {
     return ipcRenderer.invoke('dialog:folder', title, startPath);
+  },
+  chooseModImage(title, startPath) {
+    return ipcRenderer.invoke('dialog:mod-image', title, startPath);
+  },
+  modImagePath(file, folder) {
+    return ipcRenderer.invoke('files:mod-image-path', file, folder);
+  },
+  pathForFile(file) {
+    return webUtils.getPathForFile(file);
   },
   chooseImage() {
     return ipcRenderer.invoke('dialog:image');
