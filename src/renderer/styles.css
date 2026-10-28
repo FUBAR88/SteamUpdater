@@ -492,7 +492,7 @@ input[readonly] { color: var(--muted); }
   .span-2 { grid-column: auto; }
 }
 
-/* Neon theme: hard edges, corner brackets, scanlines. The light theme keeps the plain look. */
+/* Neon theme: hard edges, corner brackets. The light theme keeps the plain look. */
 :root[data-theme="neon"] {
   --bg: #04070c;
   --sidebar: #060b12;
@@ -539,14 +539,6 @@ input[readonly] { color: var(--muted); }
     linear-gradient(90deg, rgba(0, 240, 255, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
     radial-gradient(ellipse at 80% 0%, rgba(255, 43, 214, 0.08), transparent 55%),
     var(--bg);
-}
-:root[data-theme="neon"] .shell::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px);
 }
 
 :root[data-theme="neon"] .sidebar {
