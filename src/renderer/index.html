@@ -69,6 +69,20 @@
             <label><input type="radio" name="upload-mode" value="contributor"> Contributor</label>
           </div>
           <p id="mode-hint" class="hint"></p>
+          <div class="content-folder">
+            <label class="path-field" for="content-folder"><span class="label-line">Content folder <span class="req">*</span></span></label>
+            <span class="path-row">
+              <input id="content-folder" type="text" autocomplete="off" spellcheck="false" placeholder="Paste a path, e.g. E:\DayZ Modding\@MyMod">
+              <button id="content-folder-browse" class="icon" type="button" title="Choose content folder" aria-label="Choose content folder">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg>
+              </button>
+              <button id="content-folder-check" class="icon" type="button" title="Check PBO signatures" aria-label="Check PBO signatures">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 4.9-4.9 1.4 1.4-6.3 6.3z"/></svg>
+              </button>
+            </span>
+            <p class="hint">The folder with addons\ and keys\. Press Enter or the shield to check that every .pbo is signed.</p>
+            <div id="signature-report" class="signature-report" aria-live="polite" hidden></div>
+          </div>
           <div class="workshop-layout">
             <div class="grid">
               <label class="span-2"><span class="label-line">Title <span class="req" data-for="title">*</span></span><input id="workshop-title" type="text" autocomplete="off"></label>

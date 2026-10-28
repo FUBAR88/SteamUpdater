@@ -113,6 +113,121 @@ function findPrivateKeys(folder) {
   return found;
 }
 
+// Cleans a pasted folder path. Explorer's "Copy as path" wraps it in quotes.
+function cleanFolderInput(value) {
+  let text = String(value == null ? '' : value).trim();
+  while (text.length > 1 && /^["']/.test(text) && text[0] === text[text.length - 1]) {
+    text = text.slice(1, -1).trim();
+  }
+  if (!text) {
+    return '';
+  }
+  const resolved = path.resolve(text);
+  const root = path.parse(resolved).root;
+  return resolved.length > root.length ? resolved.replace(/[\\/]+$/, '') : resolved;
+}
+
+// A .bisign and a .bikey both start with the authority name, ended by a zero byte.
+function readAuthority(file) {
+  const handle = fs.openSync(file, 'r');
+  try {
+    const buffer = Buffer.alloc(512);
+    const read = fs.readSync(handle, buffer, 0, buffer.length, 0);
+    const end = buffer.indexOf(0);
+    return buffer.toString('latin1', 0, end >= 0 && end < read ? end : read).trim();
+  } finally {
+    fs.closeSync(handle);
+  }
+}
+
+function listFiles(folder, extension) {
+  if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) {
+    return [];
+  }
+  return fs.readdirSync(folder, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(extension))
+    .map((entry) => path.join(folder, entry.name))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+// Accepts the mod folder (@Mod), its addons folder, or any folder holding .pbo files.
+function locateModParts(folder) {
+  const addons = path.join(folder, 'addons');
+  if (path.basename(folder).toLowerCase() === 'addons') {
+    return { root: path.dirname(folder), addons: folder };
+  }
+  if (fs.existsSync(addons) && fs.statSync(addons).isDirectory()) {
+    return { root: folder, addons };
+  }
+  return { root: folder, addons: folder };
+}
+
+// Checks every .pbo for a .bisign next to it, and that the signing key is in keys\.
+// It does not recompute the signature hashes, so a .bisign older than its .pbo is
+// reported as outdated: the PBO was rebuilt after it was signed.
+function checkSignatures(input) {
+  const folder = cleanFolderInput(input);
+  if (!folder) {
+    throw new Error('Enter or paste a mod folder path.');
+  }
+  if (!fs.existsSync(folder)) {
+    throw new Error(`Folder not found: ${folder}`);
+  }
+  if (!fs.statSync(folder).isDirectory()) {
+    throw new Error(`That is a file, not a folder: ${folder}`);
+  }
+  const { root, addons } = locateModParts(folder);
+  const pboFiles = listFiles(addons, '.pbo');
+  if (pboFiles.length === 0) {
+    throw new Error(`No .pbo files in ${addons}. Choose the mod folder that holds addons\\.`);
+  }
+
+  const keys = ['keys', 'key']
+    .map((name) => path.join(root, name))
+    .flatMap((dir) => listFiles(dir, '.bikey'))
+    .filter((file, index, all) => all.findIndex((other) => other.toLowerCase() === file.toLowerCase()) === index)
+    .map((file) => ({ file, name: readAuthority(file) }));
+  const keyNames = new Set(keys.map((key) => key.name.toLowerCase()));
+  const bisigns = listFiles(addons, '.bisign');
+
+  const pbos = pboFiles.map((file) => {
+    const prefix = `${path.basename(file).toLowerCase()}.`;
+    const pboTime = fs.statSync(file).mtimeMs;
+    const signatures = bisigns
+      .filter((sig) => path.basename(sig).toLowerCase().startsWith(prefix))
+      .map((sig) => {
+        const keyName = readAuthority(sig);
+        return {
+          file: sig,
+          keyName,
+          keyFound: keyNames.has(keyName.toLowerCase()),
+          outdated: fs.statSync(sig).mtimeMs + 2000 < pboTime
+        };
+      });
+    let status = 'signed';
+    if (signatures.length === 0) {
+      status = 'unsigned';
+    } else if (!signatures.some((sig) => sig.keyFound)) {
+      status = keys.length === 0 ? 'no-key' : 'unknown-key';
+    } else if (signatures.filter((sig) => sig.keyFound).every((sig) => sig.outdated)) {
+      status = 'outdated';
+    }
+    return { file, name: path.basename(file), status, signatures };
+  });
+
+  const signed = pbos.filter((pbo) => pbo.status === 'signed').length;
+  return {
+    folder,
+    root,
+    addons,
+    keys,
+    pbos,
+    signed,
+    total: pbos.length,
+    ok: signed === pbos.length
+  };
+}
+
 function writeModFiles(mod, options) {
   const when = options && options.now ? options.now : new Date();
   if (!mod.contentFolder || !String(mod.contentFolder).trim()) {
@@ -139,6 +254,8 @@ function writeModFiles(mod, options) {
 
 module.exports = {
   MOD_FIELDS,
+  checkSignatures,
+  cleanFolderInput,
   dateTimeToBinaryUtc,
   escapeQuoted,
   findPrivateKeys,

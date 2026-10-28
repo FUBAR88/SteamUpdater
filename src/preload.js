@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld('updater', {
   writeFiles(mod) {
     return ipcRenderer.invoke('files:write', mod);
   },
+  checkSignatures(folder) {
+    return ipcRenderer.invoke('files:signatures', folder);
+  },
   pullAll() {
     return ipcRenderer.invoke('steam:pull-all');
   },

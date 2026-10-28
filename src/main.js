@@ -205,6 +205,7 @@ app.whenReady().then(() => {
     return shell.openExternal(target);
   });
   ipcMain.handle('files:write', (_event, mod) => files.writeModFiles(mod));
+  ipcMain.handle('files:signatures', (_event, folder) => files.checkSignatures(folder));
   ipcMain.handle('log:write', (_event, line) => {
     daylog.write(line);
     return true;

@@ -43,6 +43,20 @@ That writes a portable app to `Release\Steam Updater.exe`. It is the program its
 - DayZ Tools installed by Steam. The app looks for `DayZ Tools\Bin\Publisher` under your Steam libraries.
 - Steam running as the account that should upload
 
+## Content folder and signature check
+
+Every mod has a **Content folder** field in the Workshop panel. Paste a path (quotes from Explorer's "Copy as path" are removed), type one and press Enter, or pick it with the folder button. The mod folder (`@MyMod`), its `addons` folder, or any folder with `.pbo` files works.
+
+The shield button checks every `.pbo`:
+
+- **Signed**: a `.bisign` next to it, made with a key that is in the mod's `keys\` folder
+- **Not signed**: no `.bisign`
+- **Wrong key**: the `.bisign` names a key that is not in `keys\`
+- **No .bikey**: there is no `.bikey` in `keys\`
+- **Outdated**: the `.pbo` is newer than its `.bisign`, so it was rebuilt after signing
+
+The check reads the key name from the files. It does not recompute the signature hashes. Push runs the check again and asks before it uploads PBOs that are not signed correctly.
+
 ## Local data
 
 Mods, preview images, logs, and `settings.json` stay on this machine. They are gitignored. The first launch creates `settings.json` next to the app and a `MOD_DATA` folder for the library. `settings.example.json` shows the shape of that file. `theme` is `neon` or `light`.

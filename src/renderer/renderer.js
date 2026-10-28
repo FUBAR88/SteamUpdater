@@ -24,6 +24,8 @@ const empty = document.querySelector('#empty');
 const modList = document.querySelector('#mod-list');
 const log = document.querySelector('#log');
 const modeHint = document.querySelector('#mode-hint');
+const contentFolder = document.querySelector('#content-folder');
+const signatureReport = document.querySelector('#signature-report');
 
 let mods = [];
 let dismissed = [];
@@ -152,6 +154,7 @@ function missingRequired(mod) {
 
 function readForm(mod) {
   mod.displayName = fields.displayName.value.trim() || (mod.draft ? 'New mod' : 'Untitled mod');
+  mod.contentFolder = cleanPath(contentFolder.value);
   mod.uploadMode = readMode();
   mod.workshop.title = fields.title.value;
   mod.workshop.description = fields.description.value;
@@ -174,6 +177,7 @@ function readForm(mod) {
 
 function fillForm(mod) {
   fields.displayName.value = mod.displayName;
+  contentFolder.value = mod.contentFolder || '';
   fields.title.value = mod.workshop.title;
   fields.description.value = mod.workshop.description;
   fields.changeNote.value = mod.workshop.changeNote;
@@ -194,6 +198,130 @@ function fillForm(mod) {
   applyMode(mod.uploadMode);
   showPreview(mod.workshop.previewImage);
   applyLock(mod);
+  if (mod.contentFolder) {
+    checkFolder({ quiet: true });
+  } else {
+    clearSignatureReport();
+  }
+}
+
+// Strips the quotes Explorer's "Copy as path" adds. The main process resolves the rest.
+function cleanPath(value) {
+  let text = String(value || '').trim();
+  while (text.length > 1 && /^["']/.test(text) && text[0] === text[text.length - 1]) {
+    text = text.slice(1, -1).trim();
+  }
+  return text;
+}
+
+const signatureStates = {
+  signed: 'Signed',
+  unsigned: 'Not signed',
+  outdated: 'Outdated',
+  'no-key': 'No .bikey',
+  'unknown-key': 'Wrong key'
+};
+
+const signatureHelp = {
+  unsigned: 'no .bisign next to it',
+  outdated: 'the .pbo is newer than its .bisign, sign it again',
+  'no-key': 'keys\\ holds no .bikey',
+  'unknown-key': 'signed with a key that is not in keys\\'
+};
+
+let signatureCheck = 0;
+
+function clearSignatureReport() {
+  signatureCheck += 1;
+  signatureReport.hidden = true;
+  signatureReport.className = 'signature-report';
+  signatureReport.replaceChildren();
+}
+
+function showSignatureReport(report) {
+  signatureReport.replaceChildren();
+  signatureReport.className = `signature-report ${report.ok ? 'is-ok' : 'is-bad'}`;
+  const summary = document.createElement('p');
+  summary.className = 'sig-summary';
+  summary.textContent = report.ok
+    ? `All ${report.total} PBOs are signed.`
+    : `${report.total - report.signed} of ${report.total} PBOs are not signed correctly.`;
+  const keys = document.createElement('p');
+  keys.className = 'sig-keys';
+  keys.textContent = report.keys.length
+    ? `Keys: ${report.keys.map((key) => key.name || '(unnamed)').join(', ')} · ${report.addons}`
+    : `No .bikey in ${report.root}\\keys · ${report.addons}`;
+  const list = document.createElement('ul');
+  report.pbos.forEach((pbo) => {
+    const item = document.createElement('li');
+    const state = document.createElement('span');
+    state.className = `sig-state ${pbo.status}`;
+    state.textContent = signatureStates[pbo.status] || pbo.status;
+    const name = document.createElement('span');
+    const keyNames = pbo.signatures.map((sig) => sig.keyName).filter(Boolean);
+    const detail = signatureHelp[pbo.status] || (keyNames.length ? `key ${keyNames.join(', ')}` : '');
+    name.textContent = detail ? `${pbo.name} (${detail})` : pbo.name;
+    item.append(state, name);
+    list.appendChild(item);
+  });
+  signatureReport.append(summary, keys, list);
+  signatureReport.hidden = false;
+}
+
+function showSignatureError(message) {
+  signatureReport.replaceChildren();
+  signatureReport.className = 'signature-report is-bad';
+  const line = document.createElement('p');
+  line.className = 'sig-summary';
+  line.textContent = message;
+  signatureReport.append(line);
+  signatureReport.hidden = false;
+}
+
+// Checks the folder in the content field. quiet keeps the result out of the log,
+// for when a mod is only opened.
+async function checkFolder(options) {
+  const quiet = Boolean(options && options.quiet);
+  const typed = cleanPath(contentFolder.value);
+  if (!typed) {
+    clearSignatureReport();
+    if (!quiet) {
+      appendLog('Enter or paste a mod folder path first.');
+    }
+    return null;
+  }
+  signatureCheck += 1;
+  const ticket = signatureCheck;
+  try {
+    const report = await window.updater.checkSignatures(typed);
+    if (ticket !== signatureCheck) {
+      return report;
+    }
+    showSignatureReport(report);
+    const mod = selected();
+    if (report.folder !== contentFolder.value) {
+      contentFolder.value = report.folder;
+      if (mod && !mod.locked) {
+        queueSave();
+      }
+    }
+    if (!quiet) {
+      appendLog(`Signature check ${report.folder}: ${report.signed} of ${report.total} PBOs signed.`);
+      report.pbos.filter((pbo) => pbo.status !== 'signed').forEach((pbo) => {
+        appendLog(`  ${pbo.name}: ${signatureStates[pbo.status] || pbo.status}, ${signatureHelp[pbo.status] || ''}`);
+      });
+    }
+    return report;
+  } catch (error) {
+    const message = String(error.message || error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    if (ticket === signatureCheck) {
+      showSignatureError(message);
+      if (!quiet) {
+        appendLog(message);
+      }
+    }
+    return null;
+  }
 }
 
 function roleOf(mod) {
@@ -378,6 +506,7 @@ function applyLock(mod) {
   });
   document.querySelector('#push-mod').disabled = busy || locked;
   document.querySelector('#save-mod').disabled = busy || locked;
+  document.querySelector('#content-folder-browse').disabled = busy || locked;
 }
 
 function queueSave() {
@@ -596,6 +725,17 @@ async function uploadOne(mod) {
     appendLog(`Push needs ${missing.join(', ')}.`);
     return;
   }
+  if (mod.id === selectedId) {
+    const report = await checkFolder();
+    if (!report) {
+      appendLog('Push stopped. Fix the content folder first.');
+      return;
+    }
+    if (!report.ok && !window.confirm(`${report.total - report.signed} of ${report.total} PBOs are not signed correctly. Servers that verify signatures will kick players. Push anyway?`)) {
+      appendLog('Push cancelled.');
+      return;
+    }
+  }
   mod.draft = false;
   renderList();
   pushing = true;
@@ -691,6 +831,39 @@ document.querySelector('#pull-all').addEventListener('click', async () => {
     setBusy(false);
     window.setTimeout(hideSplash, 900);
   }
+});
+
+contentFolder.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    checkFolder();
+  }
+});
+
+contentFolder.addEventListener('change', () => {
+  checkFolder();
+});
+
+contentFolder.addEventListener('paste', () => {
+  window.setTimeout(() => checkFolder({ quiet: true }), 0);
+});
+
+document.querySelector('#content-folder-check').addEventListener('click', () => {
+  checkFolder();
+});
+
+document.querySelector('#content-folder-browse').addEventListener('click', async () => {
+  const mod = selected();
+  if (!mod || busy || mod.locked) {
+    return;
+  }
+  const folder = await window.updater.chooseFolder('Mod content folder');
+  if (!folder) {
+    return;
+  }
+  contentFolder.value = folder;
+  queueSave();
+  checkFolder();
 });
 
 form.addEventListener('input', queueSave);
