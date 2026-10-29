@@ -1468,10 +1468,18 @@ document.addEventListener('keydown', (event) => {
       document.querySelector('#unlock-cancel').click();
     } else if (!settingsModal.hidden) {
       settingsModal.hidden = true;
+    } else if (!document.querySelector('#pack-save-modal').hidden) {
+      document.querySelector('#pack-save-cancel').click();
+    } else if (!document.querySelector('#pack-delete-modal').hidden) {
+      document.querySelector('#pack-delete-cancel').click();
     }
     return;
   }
   if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
+    return;
+  }
+  // The Pack view handles its own keys in pack.js.
+  if (document.body.dataset.view === 'pack') {
     return;
   }
   const key = event.key.toLowerCase();
@@ -1607,6 +1615,10 @@ function loadLibrary() {
       selectedId = '';
     }
     renderList();
+    // The Pack view lists these mods as destinations.
+    if (typeof refreshPackMods === 'function') {
+      refreshPackMods();
+    }
   });
 }
 
@@ -1733,9 +1745,28 @@ window.updater.onWindowState((state) => {
   button.innerHTML = state.maximized ? windowIcons.restore : windowIcons.maximize;
 });
 
+// The credit floats outside the window, lined up with "DayZ Workshop" in the title bar.
+function placeCredit() {
+  const sub = document.querySelector('.titlebar-sub');
+  if (sub) {
+    document.documentElement.style.setProperty('--credit-x', `${Math.round(sub.getBoundingClientRect().left)}px`);
+  }
+}
+window.addEventListener('resize', placeCredit);
+window.updater.onWindowState(() => window.requestAnimationFrame(placeCredit));
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(placeCredit);
+}
+placeCredit();
+
 function applyTheme(theme) {
   const next = theme === 'light' ? 'light' : 'neon';
   document.documentElement.dataset.theme = next;
+  window.requestAnimationFrame(() => {
+    if (typeof placeCredit === 'function') {
+      placeCredit();
+    }
+  });
   const button = document.querySelector('#theme-toggle');
   const label = next === 'light' ? 'Neon' : 'Light';
   button.title = label;
@@ -1762,6 +1793,8 @@ document.querySelector('#open-settings').addEventListener('click', async () => {
   document.querySelector('#settings-library').value = current.libraryFile;
   document.querySelector('#settings-steam').value = current.steamDir || '';
   document.querySelector('#settings-publisher').value = current.publisherDir || '';
+  document.querySelector('#settings-addon-builder').value = current.addonBuilder || '';
+  document.querySelector('#settings-files').value = current.filesTemplate || '';
   settingsModal.hidden = false;
 });
 
@@ -1797,6 +1830,14 @@ document.querySelector('#settings-publisher-browse').addEventListener('click', a
   }
 });
 
+document.querySelector('#settings-addon-builder-browse').addEventListener('click', async () => {
+  const input = document.querySelector('#settings-addon-builder');
+  const file = await window.updater.chooseFile('AddonBuilder.exe', input.value, 'exe');
+  if (file) {
+    input.value = file;
+  }
+});
+
 document.querySelector('#settings-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
@@ -1804,7 +1845,9 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
       dataFolder: document.querySelector('#settings-data').value.trim(),
       libraryFile: document.querySelector('#settings-library').value.trim(),
       steamDir: document.querySelector('#settings-steam').value.trim(),
-      publisherDir: document.querySelector('#settings-publisher').value.trim()
+      publisherDir: document.querySelector('#settings-publisher').value.trim(),
+      addonBuilder: document.querySelector('#settings-addon-builder').value.trim(),
+      filesTemplate: document.querySelector('#settings-files').value.trim()
     });
     settingsModal.hidden = true;
     appendLog(`Data folder ${saved.dataFolder}`);

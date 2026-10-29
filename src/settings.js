@@ -4,6 +4,9 @@ const path = require('path');
 
 const USUAL_STEAM = 'C:\\Program Files (x86)\\Steam';
 
+// The list AddonBuilder copies into the PBO as they are, without binarizing.
+const DEFAULT_FILES = '*.emat;*.edds;*.ptc;*.c;*.imageset;*.layout;*.styles;*.ogg;*.png;*.paa;*.rvmat;*.wrp;*.xml;*.csv;*.json;*.fnt;*.ttf;*.wav;*.mp3;*.tga;*.html;*.txt;';
+
 function rootDir() {
   if (process.env.PORTABLE_EXECUTABLE_DIR) {
     return process.env.PORTABLE_EXECUTABLE_DIR;
@@ -81,6 +84,24 @@ function detectPublisherDir(steamDir) {
   return '';
 }
 
+function findAddonBuilder(steamDir, publisherDir) {
+  if (publisherDir) {
+    const next = path.join(path.dirname(publisherDir), 'AddonBuilder', 'AddonBuilder.exe');
+    if (fs.existsSync(next)) {
+      return next;
+    }
+  }
+  // The saved Steam folder first, then the one Steam itself reports.
+  const libraries = [...libraryFolders(steamDir), ...libraryFolders(detectSteamDir())];
+  for (let index = 0; index < libraries.length; index += 1) {
+    const builder = path.join(libraries[index], 'steamapps', 'common', 'DayZ Tools', 'Bin', 'AddonBuilder', 'AddonBuilder.exe');
+    if (fs.existsSync(builder)) {
+      return builder;
+    }
+  }
+  return '';
+}
+
 function defaults() {
   const dataFolder = path.join(rootDir(), 'MOD_DATA');
   const steamDir = detectSteamDir();
@@ -90,6 +111,8 @@ function defaults() {
     theme: 'neon',
     steamDir,
     publisherDir: detectPublisherDir(steamDir),
+    addonBuilder: '',
+    filesTemplate: DEFAULT_FILES,
     window: null,
     lastModId: ''
   };
@@ -130,6 +153,8 @@ function read() {
       theme: data.theme === 'light' ? 'light' : 'neon',
       steamDir,
       publisherDir: data.publisherDir || detectPublisherDir(steamDir) || base.publisherDir,
+      addonBuilder: typeof data.addonBuilder === 'string' ? data.addonBuilder : '',
+      filesTemplate: typeof data.filesTemplate === 'string' && data.filesTemplate.trim() ? data.filesTemplate : DEFAULT_FILES,
       window: cleanWindow(data.window),
       lastModId: typeof data.lastModId === 'string' ? data.lastModId : ''
     };
@@ -159,6 +184,10 @@ function problem(next) {
   if (!publisherDir || !fs.existsSync(path.join(publisherDir, 'SteamLayerWrap.dll'))) {
     return 'The DayZ Publisher folder must contain SteamLayerWrap.dll.';
   }
+  const addonBuilder = String((next && next.addonBuilder) || '').trim();
+  if (addonBuilder && !fs.existsSync(addonBuilder)) {
+    return 'AddonBuilder.exe was not found at that path. Leave the field empty to find it next to DayZ Tools.';
+  }
   return '';
 }
 
@@ -169,6 +198,8 @@ function update(partial) {
   }
   next.steamDir = String(next.steamDir || '').trim();
   next.publisherDir = String(next.publisherDir || '').trim();
+  next.addonBuilder = String(next.addonBuilder || '').trim();
+  next.filesTemplate = String(next.filesTemplate || '').trim() || DEFAULT_FILES;
   next.window = cleanWindow(next.window);
   next.lastModId = typeof next.lastModId === 'string' ? next.lastModId : '';
   current = next;
@@ -177,7 +208,15 @@ function update(partial) {
   return current;
 }
 
+// AddonBuilder from DayZ Tools: next to the Publisher folder, else in a Steam library.
+function detectAddonBuilder() {
+  const current = get();
+  return findAddonBuilder(current.steamDir, current.publisherDir);
+}
+
 module.exports = {
+  DEFAULT_FILES,
+  detectAddonBuilder,
   get,
   update,
   problem

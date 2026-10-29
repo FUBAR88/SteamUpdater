@@ -60,6 +60,20 @@ It also looks at `keys\` itself: more than one `.bikey`, or a `.bikey` that sign
 
 The check compares the public key stored in each `.bisign` with the one in each `.bikey`. It does not recompute the signature hashes. Push runs the check again and asks before it uploads when a PBO is not signed correctly or `keys\` needs a look.
 
+## Packing
+
+The **Pack** tab in the title bar packs your source folders into PBOs and writes them straight into a mod folder, so nothing has to be copied into `MOD_DATA` by hand. It uses AddonBuilder from DayZ Tools.
+
+- **Templates** (left): a template holds any number of source folders, each becomes one PBO named after its folder. `RevolutionZA` and `Deadmans-Echo` come built in and stay as they are. **Save as own** copies one with your own name and custom text, which you can then change freely. Templates are stored in `MOD_DATA\pack_templates.json`.
+- **Config** (middle): the pack folders (tick the ones the Pack button builds, or pack one row on its own), the prefix (empty: from `$PBOPREFIX$` or `$PREFIX$` in the folder, else the folder name), the files AddonBuilder copies without binarizing, an exclusion list file, extra exclusion patterns, and Binarize (off: pack only).
+- **Destination** (right): any folder, or a mod from the updater list, which uses its content folder. The PBOs go into its addons folder, the public key into its keys folder (both names can be changed, e.g. `Addons` and `key`). With a private key every PBO is signed. The private key must not be inside the destination, and a `.biprivatekey` is never packed.
+
+After a pack, the same signature check as in the Workshop panel runs on the destination. **Open in Workshop** jumps to the linked mod, ready to push.
+
+Settings has two new fields: **AddonBuilder** (empty: found next to DayZ Tools) and **Files template**, the default list of files to copy directly for every template that leaves its own list empty.
+
+AddonBuilder 1.0.240639 crashes on its own `-exclude` option, so exclusions are applied by the app: each source is copied into a temporary folder without the excluded files, and that copy is packed. AddonBuilder still applies the `exclude.lst` of DayZ Tools on top. A pack only counts when the PBO was really rewritten, because AddonBuilder can report success after a crash.
+
 ## Pushing
 
 - **Check before push**: a contributor push replaces the whole workshop page. Before it starts, the app reads the page from Steam and shows what changes: title, visibility, tags, preview image, and the description line by line. **Push** goes on, **Use workshop text** copies the page from Steam into the form and stops, **Cancel** stops. Steam only shows public items to this lookup. For private and friends-only items the dialog lists what the push will set.

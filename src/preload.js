@@ -25,6 +25,26 @@ contextBridge.exposeInMainWorld('updater', {
   chooseFolder(title, startPath) {
     return ipcRenderer.invoke('dialog:folder', title, startPath);
   },
+  chooseFile(title, startPath, kind) {
+    return ipcRenderer.invoke('dialog:file', title, startPath, kind);
+  },
+  packTemplates() {
+    return ipcRenderer.invoke('pack:templates');
+  },
+  savePackTemplates(payload) {
+    return ipcRenderer.invoke('pack:templates-save', payload);
+  },
+  packPlan(template, only) {
+    return ipcRenderer.invoke('pack:plan', template, only);
+  },
+  pack(template, only) {
+    return ipcRenderer.invoke('pack:run', template, only);
+  },
+  onPackProgress(callback) {
+    const listener = (_event, line) => callback(line);
+    ipcRenderer.on('pack:progress', listener);
+    return () => ipcRenderer.removeListener('pack:progress', listener);
+  },
   chooseModImage(title, startPath) {
     return ipcRenderer.invoke('dialog:mod-image', title, startPath);
   },

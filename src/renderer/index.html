@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div id="credit" class="credit" aria-label="Made by Fubar and Psyern"><span class="credit-made">Made by</span><span class="credit-names">Fubar <span class="credit-amp">&amp;</span> Psyern</span></div>
   <div class="window">
   <div class="frame">
   <div class="shell">
@@ -15,6 +16,10 @@
     <span class="titlebar-mark" aria-hidden="true"></span>
     <span class="titlebar-title">Steam Updater</span>
     <span class="titlebar-sub">DayZ Workshop</span>
+    <nav class="view-tabs" aria-label="View">
+      <button id="view-workshop" class="view-tab active" type="button" data-view="workshop">Workshop</button>
+      <button id="view-pack" class="view-tab" type="button" data-view="pack">Pack</button>
+    </nav>
     <div class="titlebar-controls">
       <button id="window-minimize" class="window-button" type="button" title="Minimize" aria-label="Minimize">
         <svg viewBox="0 0 12 12" aria-hidden="true"><path fill="currentColor" d="M1 6h10v1H1z"/></svg>
@@ -219,6 +224,70 @@
       <pre id="log" class="log" aria-live="polite"></pre>
     </main>
   </div>
+  <div id="pack-view" class="pack-app" hidden>
+    <aside class="sidebar pack-templates">
+      <header class="brand">
+        <p class="eyebrow">PBO packing</p>
+        <h1>Templates</h1>
+      </header>
+      <div class="sidebar-actions">
+        <button id="pack-new" class="icon" type="button" title="New template" aria-label="New template"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 5h2v14h-2zM5 11h14v2H5z"/></svg></button>
+        <button id="pack-save-as" class="icon" type="button" title="Save as own template" aria-label="Save as own template"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg></button>
+        <button id="pack-delete" class="icon danger" type="button" title="Delete template" aria-label="Delete template"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2zM4 5h16v2H4V5z"/></svg></button>
+      </div>
+      <nav id="pack-template-list" class="mod-list" aria-label="Templates"></nav>
+      <p class="sidebar-note">A template packs any number of folders, each into its own PBO, and puts them into the destination. Built-in templates stay as they are. Save as own to change them.</p>
+    </aside>
+    <main class="workspace pack-config">
+      <section class="panel">
+        <h2>Config</h2>
+        <p id="pack-builtin-hint" class="hint builtin-hint" hidden>Built-in template. Pack works as it is. To change paths, packs or keys, save it as your own template.</p>
+        <div class="grid">
+          <label class="span-2"><span class="label-line">Template name</span><input id="pack-name" type="text" autocomplete="off"></label>
+          <label class="span-2"><span class="label-line">Custom text</span><textarea id="pack-note" rows="3" placeholder="What this template is for, which server, anything you want to keep with it"></textarea></label>
+        </div>
+      </section>
+      <section id="pack-packs" class="panel pack-packs">
+        <h2>Packs</h2>
+        <p class="hint">Each folder becomes one PBO, named after the folder. The prefix comes from $PBOPREFIX$ or $PREFIX$ in the folder, else the folder name. Drop folders here to add them.</p>
+        <div id="pack-rows" class="pack-rows"></div>
+        <div class="pack-rows-foot">
+          <button id="pack-add" type="button">Add pack folder</button>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Files and exclusions</h2>
+        <div class="grid">
+          <label class="span-2"><span class="label-line">Files to copy directly</span><textarea id="pack-files" rows="3" spellcheck="false"></textarea><span class="field-hint">Left empty, the Files template from Settings is used.</span></label>
+          <div class="span-2"><label class="path-field" for="pack-exclude-file"><span class="label-line">Exclusion list</span></label><span class="path-row"><input id="pack-exclude-file" type="text" autocomplete="off" spellcheck="false" placeholder="Empty: only the exclude.lst of DayZ Tools"><button id="pack-exclude-file-browse" class="icon" type="button" title="Choose exclusion list" aria-label="Choose exclusion list"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5z"/></svg></button></span><span class="field-hint">A .lst file with one pattern per line, like exclude.lst in DayZ Tools. AddonBuilder always applies its own exclude.lst as well.</span></div>
+          <label class="span-2"><span class="label-line">Extra exclusions</span><textarea id="pack-exclude" rows="3" spellcheck="false" placeholder="*.psd&#10;*\Source\*&#10;notes.txt"></textarea><span class="field-hint">One pattern per line or separated by ;. A .biprivatekey is never packed.</span></label>
+          <div class="span-2">
+            <button id="pack-binarize" class="switch" type="button" role="switch" aria-checked="false"><span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span><span>Binarize (off: pack only)</span></button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <aside class="workspace pack-destination">
+      <section class="panel">
+        <h2>Destination</h2>
+        <div class="grid">
+          <label class="span-2"><span class="label-line">Mod in the updater</span><select id="pack-linked"></select><span class="field-hint">Pick a mod from the list to pack straight into its content folder, or keep your own path.</span></label>
+          <div class="span-2"><label class="path-field" for="pack-destination"><span class="label-line">Destination folder <span class="req">*</span></span></label><span class="path-row"><input id="pack-destination" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. M:\Projects\SteamUpdater\MOD_DATA\3480589933"><button id="pack-destination-browse" class="icon" type="button" title="Choose destination folder" aria-label="Choose destination folder"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg></button><button id="pack-destination-open" class="icon" type="button" title="Open in Explorer" aria-label="Open in Explorer"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 3h7v7h-2V6.4l-6.3 6.3-1.4-1.4L17.6 5H14V3zM4 6a2 2 0 0 1 2-2h5v2H6v12h12v-5h2v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z"/></svg></button></span></div>
+          <label><span class="label-line">Addons folder</span><input id="pack-addons" type="text" autocomplete="off" spellcheck="false" placeholder="addons"></label>
+          <label><span class="label-line">Keys folder</span><input id="pack-keys" type="text" autocomplete="off" spellcheck="false" placeholder="keys"></label>
+          <div class="span-2"><label class="path-field" for="pack-private-key"><span class="label-line">Private key</span></label><span class="path-row"><input id="pack-private-key" type="text" autocomplete="off" spellcheck="false" placeholder="Empty: the PBOs stay unsigned"><button id="pack-private-key-browse" class="icon" type="button" title="Choose .biprivatekey" aria-label="Choose .biprivatekey"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5z"/></svg></button></span><span class="field-hint">Signs every PBO. Keep it outside the destination, it must never be uploaded.</span></div>
+          <div class="span-2"><label class="path-field" for="pack-public-key"><span class="label-line">Public key</span></label><span class="path-row"><input id="pack-public-key" type="text" autocomplete="off" spellcheck="false" placeholder="Empty: the .bikey next to the private key"><button id="pack-public-key-browse" class="icon" type="button" title="Choose .bikey" aria-label="Choose .bikey"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5z"/></svg></button></span><span class="field-hint">Copied into the keys folder.</span></div>
+        </div>
+        <div id="pack-summary" class="pack-summary" aria-live="polite"></div>
+        <div class="pack-actions">
+          <button id="pack-run" class="primary pack-button" type="button" title="Pack every ticked folder (Ctrl+Enter)">Pack</button>
+          <button id="pack-goto-mod" type="button" title="Open the linked mod in the Workshop view" hidden>Open in Workshop</button>
+        </div>
+        <div id="pack-signature" class="signature-report" aria-live="polite" hidden></div>
+      </section>
+      <pre id="pack-log" class="log" aria-live="polite"></pre>
+    </aside>
+  </div>
   <div id="settings-modal" class="modal" hidden>
     <form id="settings-form" class="modal-card">
       <h2>Settings</h2>
@@ -253,6 +322,16 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg>
           </button>
         </span>
+      </label>
+      <label class="path-field">AddonBuilder
+        <span class="path-row">
+          <input id="settings-addon-builder" type="text" autocomplete="off" placeholder="Empty: found next to DayZ Tools">
+          <button id="settings-addon-builder-browse" class="icon" type="button" title="Choose AddonBuilder.exe" aria-label="Choose AddonBuilder.exe"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5z"/></svg></button>
+        </span>
+      </label>
+      <label>Files template
+        <textarea id="settings-files" rows="3" spellcheck="false"></textarea>
+        <span class="field-hint">Files AddonBuilder copies into the PBO as they are. Used by every template that leaves its own list empty.</span>
       </label>
       <div class="modal-actions">
         <button id="settings-cancel" class="icon" type="button" title="Cancel" aria-label="Cancel">
@@ -293,6 +372,31 @@
       </div>
     </div>
   </div>
+  <div id="pack-save-modal" class="modal" hidden>
+    <form id="pack-save-form" class="modal-card">
+      <h2>Save as own template</h2>
+      <label>Name
+        <input id="pack-save-name" type="text" autocomplete="off">
+      </label>
+      <label>Custom text
+        <textarea id="pack-save-note" rows="4"></textarea>
+      </label>
+      <div class="modal-actions">
+        <button id="pack-save-cancel" class="icon" type="button" title="Cancel" aria-label="Cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg></button>
+        <button id="pack-save-ok" class="icon" type="submit" title="Save template" aria-label="Save template"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg></button>
+      </div>
+    </form>
+  </div>
+  <div id="pack-delete-modal" class="modal" hidden>
+    <form id="pack-delete-form" class="modal-card">
+      <h2>Delete template</h2>
+      <p>Delete <strong id="pack-delete-name"></strong>? The packed PBOs stay where they are.</p>
+      <div class="modal-actions">
+        <button id="pack-delete-cancel" type="button">Cancel</button>
+        <button id="pack-delete-ok" class="primary" type="submit">Delete</button>
+      </div>
+    </form>
+  </div>
   <div id="splash" class="splash" hidden>
     <div class="splash-card">
       <div class="spinner" aria-hidden="true"></div>
@@ -305,5 +409,6 @@
   </div>
   </div>
   <script src="renderer.js"></script>
+  <script src="pack.js"></script>
 </body>
 </html>

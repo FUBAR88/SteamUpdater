@@ -8,6 +8,7 @@ const workshop = require('./workshop');
 const images = require('./images');
 const settings = require('./settings');
 const daylog = require('./daylog');
+const packer = require('./packer');
 
 let mainWindow = null;
 
@@ -30,6 +31,15 @@ function existingFolder(value) {
       return '';
     }
     folder = parent;
+  }
+}
+
+let packing = false;
+
+function sendPackProgress(line) {
+  daylog.write(line);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('pack:progress', line);
   }
 }
 
@@ -250,6 +260,55 @@ app.whenReady().then(() => {
     }
     const result = await dialog.showOpenDialog(mainWindow, options);
     return result.canceled ? '' : result.filePaths[0];
+  });
+  ipcMain.handle('dialog:file', async (_event, title, startPath, kind) => {
+    const filters = {
+      privateKey: [{ name: 'BI private key', extensions: ['biprivatekey'] }],
+      publicKey: [{ name: 'BI public key', extensions: ['bikey'] }],
+      exclude: [{ name: 'Exclusion list', extensions: ['lst', 'txt'] }, { name: 'All files', extensions: ['*'] }],
+      exe: [{ name: 'Program', extensions: ['exe'] }]
+    }[kind] || [{ name: 'All files', extensions: ['*'] }];
+    const options = {
+      title: typeof title === 'string' && title.trim() ? title.trim() : 'Choose a file',
+      properties: ['openFile'],
+      filters
+    };
+    const start = existingFolder(startPath);
+    if (start) {
+      options.defaultPath = start;
+    }
+    const result = await dialog.showOpenDialog(mainWindow, options);
+    return result.canceled ? '' : result.filePaths[0];
+  });
+  ipcMain.handle('pack:templates', () => packer.readTemplates());
+  ipcMain.handle('pack:templates-save', (_event, payload) => packer.writeTemplates(payload));
+  ipcMain.handle('pack:plan', (_event, template, only) => {
+    const job = packer.plan(template, only || '');
+    return {
+      builder: job.builder,
+      destination: job.destination,
+      addons: job.addons,
+      keys: job.keys,
+      publicKey: job.publicKey,
+      excludeFile: job.excludeFile,
+      files: job.files,
+      packs: job.packs,
+      problems: job.problems
+    };
+  });
+  ipcMain.handle('pack:run', async (_event, template, only) => {
+    if (packing) {
+      return { ok: false, error: 'A pack is already running.', results: [] };
+    }
+    packing = true;
+    try {
+      return await packer.pack(template, only || '', sendPackProgress);
+    } catch (error) {
+      sendPackProgress(`Pack failed. ${error.message}`);
+      return { ok: false, error: error.message, results: [] };
+    } finally {
+      packing = false;
+    }
   });
   ipcMain.handle('dialog:image', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
