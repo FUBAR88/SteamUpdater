@@ -10,9 +10,27 @@ The DayZ Publisher only shows items you authored. A contributor is on the worksh
 
 A contributor push calls the publisher's full update, so the workshop title, description, tags, visibility, preview image, and files go together. Steam still decides whether that account is allowed to change the item. The account has to be logged into the Steam client, own DayZ, and already be a creator or contributor on that workshop item. This tool does not bypass those checks, and it does not build PBO files or BIS keys.
 
-## Just use the app
+## Install the app
 
-Download [`Release/Steam Updater.exe`](Release/Steam%20Updater.exe) and run it. It is a portable app, so there is nothing to install. It creates `settings.json` and a `MOD_DATA` folder next to itself.
+Download `Steam Updater Setup <version>.exe` from the [latest release](https://github.com/FUBAR88/SteamUpdater/releases/latest) and run it. The setup installs for the current Windows user (no admin rights needed), lets you pick the folder, and adds a desktop and a Start menu shortcut. Uninstall it from Windows Settings > Apps. Your settings and mods are kept when you uninstall or update.
+
+An installed copy keeps its data out of the program folder:
+
+- `settings.json` in `%APPDATA%\Steam Updater`
+- the `MOD_DATA` library in `Documents\Steam Updater\MOD_DATA` (change it in Settings)
+
+### Portable instead
+
+[`Release/Steam Updater.exe`](Release/Steam%20Updater.exe) is the portable app, also attached to every release. Nothing to install. It creates `settings.json` and a `MOD_DATA` folder next to itself.
+
+## Updates
+
+The button with the version number in the title bar asks GitHub for the newest release of this repository. On every start it checks once and shows a green dot when a newer version is out. Click it to see the release notes, then **Update now**:
+
+- **Installed copy**: downloads the new setup, closes the app, installs it into the same folder without questions, and starts it again.
+- **Portable exe**: downloads the new `Steam Updater.exe`, replaces the running one once it has closed, and starts it.
+
+The download is checked against its size and the SHA-256 checksum GitHub lists for it. **Release page** opens the release on GitHub. The dev tool only shows whether a new version exists, it updates with `git pull`.
 
 ## Run the dev tool
 
@@ -25,7 +43,7 @@ npm start
 
 `npm install` downloads Electron and the build tools into `node_modules` (only needed once). The first start builds the small 32-bit helper, then opens the Steam Updater window.
 
-## Build the standalone exe
+## Build the setup and the exe
 
 Double-click `build-exe.bat`, or:
 
@@ -33,7 +51,22 @@ Double-click `build-exe.bat`, or:
 npm run dist
 ```
 
-That writes a portable app to `Release\Steam Updater.exe`. It is the program itself, not a setup installer. Only that exe is kept in git. The rest of `Release\` is build output.
+That writes two files to `Release\`:
+
+- `Steam Updater Setup <version>.exe`, the installer
+- `Steam Updater.exe`, the portable app
+
+Only the portable exe is kept in git. The setup is too big for a git file on GitHub and goes into the releases. The rest of `Release\` is build output.
+
+## Publish a release
+
+1. Raise `version` in `package.json` (for example `1.0.0` to `1.1.0`). The update button compares this number with the newest release.
+2. Create a GitHub token with write access to the contents of `FUBAR88/SteamUpdater` and set it in the console: `set GH_TOKEN=<token>`.
+3. Run `release.bat` (or `npm run release`).
+
+It builds both files and publishes them as release `v<version>` on GitHub, with the setup, the portable exe, `latest.yml` and the blockmap attached. Write the release notes on the release page afterwards, the update dialog shows them. The release has to be published, not a draft or pre-release, to count as the latest.
+
+The build needs DayZ Tools for the helper (see below), so releases are built on a machine that has them, not by GitHub Actions.
 
 ## What you need
 
@@ -94,7 +127,7 @@ The window opens where it was closed, with the mod that was open last.
 
 ## Local data
 
-Mods, preview images, logs, and `settings.json` stay on this machine. They are gitignored. The first launch creates `settings.json` next to the app and a `MOD_DATA` folder for the library. `settings.example.json` shows the shape of that file. `theme` is `neon` or `light`. `window` and `lastModId` are written by the app when it closes and when a mod is opened.
+Mods, preview images, logs, and `settings.json` stay on this machine. They are gitignored. The first launch creates `settings.json` and a `MOD_DATA` folder for the library: next to the portable exe and the dev tool, in `%APPDATA%\Steam Updater` and `Documents\Steam Updater` for an installed copy. `settings.example.json` shows the shape of that file. `theme` is `neon` or `light`. `window` and `lastModId` are written by the app when it closes and when a mod is opened.
 
 `steamDir` is the folder that contains `steam.exe`. `publisherDir` is the DayZ Publisher folder that contains `SteamLayerWrap.dll`. Both are filled in from the Steam registry and your Steam libraries. Change them in Settings if the detected folders are wrong. A path you save is kept.
 

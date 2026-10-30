@@ -9,6 +9,7 @@ const images = require('./images');
 const settings = require('./settings');
 const daylog = require('./daylog');
 const packer = require('./packer');
+const updater = require('./updater');
 
 let mainWindow = null;
 
@@ -367,6 +368,31 @@ app.whenReady().then(() => {
     }
     return shell.openExternal(target);
   });
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), mode: settings.mode() }));
+  ipcMain.handle('update:check', async () => {
+    const result = await updater.check();
+    daylog.write(result.newer
+      ? `Update check: ${result.latest} is available, this is ${result.current}`
+      : `Update check: ${result.current} is up to date${result.latest ? '' : ' (no release yet)'}`);
+    return result;
+  });
+  ipcMain.handle('update:install', async () => {
+    daylog.write('Downloading the update from GitHub');
+    const result = await updater.install((step) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update:progress', step);
+      }
+    });
+    daylog.write(`Update ${result.version} downloaded, the app closes for the install`);
+    return result;
+  });
+  ipcMain.handle('update:open-page', (_event, url) => {
+    const target = String(url || '');
+    if (target !== updater.RELEASES_PAGE && !target.startsWith(`${updater.RELEASES_PAGE}/`)) {
+      throw new Error('That is not a release page of this app.');
+    }
+    return shell.openExternal(target);
+  });
   ipcMain.handle('files:write', (_event, mod) => files.writeModFiles(mod));
   ipcMain.handle('files:mod-image-path', (_event, file, folder) => files.modImagePath(file, folder));
   ipcMain.handle('files:signatures', (_event, folder) => files.checkSignatures(folder));
@@ -477,6 +503,7 @@ app.whenReady().then(() => {
     return result;
   });
 
+  updater.cleanup();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

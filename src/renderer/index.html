@@ -21,6 +21,11 @@
       <button id="view-pack" class="view-tab" type="button" data-view="pack">Pack</button>
     </nav>
     <div class="titlebar-controls">
+      <button id="update-open" class="update-button" type="button" title="Check for updates" aria-label="Check for updates">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4a8 8 0 0 1 7.7 5.8l1.9-.6A10 10 0 0 0 4 6.1V3H2v7h7V8H5.4A8 8 0 0 1 12 4zm0 16a8 8 0 0 1-7.7-5.8l-1.9.6A10 10 0 0 0 20 17.9V21h2v-7h-7v2h3.6A8 8 0 0 1 12 20z"/></svg>
+        <span id="update-version" class="update-version"></span>
+        <span id="update-dot" class="update-dot" hidden></span>
+      </button>
       <button id="window-minimize" class="window-button" type="button" title="Minimize" aria-label="Minimize">
         <svg viewBox="0 0 12 12" aria-hidden="true"><path fill="currentColor" d="M1 6h10v1H1z"/></svg>
       </button>
@@ -397,6 +402,20 @@
       </div>
     </form>
   </div>
+  <div id="update-modal" class="modal" hidden>
+    <div class="modal-card update-card" role="dialog" aria-modal="true" aria-labelledby="update-title">
+      <h2 id="update-title">Updates</h2>
+      <p id="update-status" class="update-status" aria-live="polite">Checking GitHub…</p>
+      <pre id="update-notes" class="update-notes" hidden></pre>
+      <div id="update-progress" class="update-progress" hidden><span id="update-bar"></span></div>
+      <div class="modal-actions">
+        <button id="update-page" type="button" title="Open the releases on GitHub">Release page</button>
+        <button id="update-recheck" type="button">Check again</button>
+        <button id="update-close" type="button">Close</button>
+        <button id="update-install" class="primary" type="button" hidden>Update now</button>
+      </div>
+    </div>
+  </div>
   <div id="splash" class="splash" hidden>
     <div class="splash-card">
       <div class="spinner" aria-hidden="true"></div>
@@ -410,5 +429,6 @@
   </div>
   <script src="renderer.js"></script>
   <script src="pack.js"></script>
+  <script src="update.js"></script>
 </body>
 </html>

@@ -8,7 +8,10 @@
   "scripts": {
     "prestart": "dotnet build steam-helper/SteamHelper.csproj -c Release",
     "start": "electron .",
-    "dist": "dotnet build steam-helper/SteamHelper.csproj -c Release && electron-builder --win portable"
+    "helper": "dotnet build steam-helper/SteamHelper.csproj -c Release",
+    "dist": "npm run helper && electron-builder --win nsis portable --publish never",
+    "dist:setup": "npm run helper && electron-builder --win nsis --publish never",
+    "release": "npm run helper && electron-builder --win nsis portable --publish always"
   },
   "devDependencies": {
     "electron": "^44.9.3",
@@ -38,9 +41,33 @@
     ],
     "win": {
       "target": [
+        "nsis",
         "portable"
-      ],
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Steam Updater",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "license": "LICENSE",
+      "artifactName": "Steam Updater Setup ${version}.exe",
+      "differentialPackage": false
+    },
+    "portable": {
       "artifactName": "Steam Updater.exe"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "FUBAR88",
+        "repo": "SteamUpdater",
+        "releaseType": "release"
+      }
+    ]
   }
 }

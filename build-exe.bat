@@ -12,10 +12,11 @@ if not exist node_modules (
 call npm run dist
 if errorlevel 1 (
   echo.
-  echo The exe build failed.
+  echo The build failed.
   pause
   exit /b 1
 )
 echo.
+echo Setup:        Release\Steam Updater Setup ^<version^>.exe
 echo Portable app: Release\Steam Updater.exe
 pause

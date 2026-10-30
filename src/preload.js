@@ -90,6 +90,23 @@ contextBridge.exposeInMainWorld('updater', {
   writeLog(line) {
     return ipcRenderer.invoke('log:write', line);
   },
+  appInfo() {
+    return ipcRenderer.invoke('app:info');
+  },
+  checkUpdate() {
+    return ipcRenderer.invoke('update:check');
+  },
+  installUpdate() {
+    return ipcRenderer.invoke('update:install');
+  },
+  openReleasePage(url) {
+    return ipcRenderer.invoke('update:open-page', url);
+  },
+  onUpdateProgress(callback) {
+    const listener = (_event, step) => callback(step);
+    ipcRenderer.on('update:progress', listener);
+    return () => ipcRenderer.removeListener('update:progress', listener);
+  },
   windowControl(action) {
     return ipcRenderer.invoke('window:control', action);
   },

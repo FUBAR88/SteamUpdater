@@ -904,3 +904,49 @@ body.is-maximized .credit { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .credit { animation: none; }
 }
+
+/* Update button in the title bar and its dialog. */
+.update-button {
+  position: relative;
+  height: 100%;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+.update-button svg { width: 13px; height: 13px; display: block; }
+.update-button:hover { background: var(--active); color: var(--text); }
+.update-dot {
+  position: absolute;
+  top: 7px;
+  left: 20px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 6px var(--ok);
+}
+.update-dot[hidden] { display: none; }
+.modal-card.update-card { width: min(640px, calc(100vw - 32px)); }
+.update-status { margin: 0; font-size: 13px; line-height: 1.45; }
+.update-notes {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--input);
+  font-family: var(--mono, Consolas, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.update-notes[hidden], .update-progress[hidden], .update-card button[hidden] { display: none; }
+.update-progress { height: 6px; border-radius: 3px; background: var(--input); overflow: hidden; }
+.update-progress span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }

@@ -1,3 +1,4 @@
+const { app } = require('electron');
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -7,11 +8,32 @@ const USUAL_STEAM = 'C:\\Program Files (x86)\\Steam';
 // The list AddonBuilder copies into the PBO as they are, without binarizing.
 const DEFAULT_FILES = '*.emat;*.edds;*.ptc;*.c;*.imageset;*.layout;*.styles;*.ogg;*.png;*.paa;*.rvmat;*.wrp;*.xml;*.csv;*.json;*.fnt;*.ttf;*.wav;*.mp3;*.tga;*.html;*.txt;';
 
-function rootDir() {
+// How this copy runs: the portable exe, an installed copy, or the dev tool.
+function mode() {
   if (process.env.PORTABLE_EXECUTABLE_DIR) {
+    return 'portable';
+  }
+  return app && app.isPackaged ? 'installed' : 'dev';
+}
+
+// An installed copy keeps its data out of the program folder, because the
+// setup of the next version replaces that folder.
+function rootDir() {
+  const current = mode();
+  if (current === 'portable') {
     return process.env.PORTABLE_EXECUTABLE_DIR;
   }
+  if (current === 'installed') {
+    return path.join(app.getPath('appData'), 'Steam Updater');
+  }
   return path.resolve(__dirname, '..');
+}
+
+function defaultDataFolder() {
+  if (mode() === 'installed') {
+    return path.join(app.getPath('documents'), 'Steam Updater', 'MOD_DATA');
+  }
+  return path.join(rootDir(), 'MOD_DATA');
 }
 
 function settingsFile() {
@@ -103,7 +125,7 @@ function findAddonBuilder(steamDir, publisherDir) {
 }
 
 function defaults() {
-  const dataFolder = path.join(rootDir(), 'MOD_DATA');
+  const dataFolder = defaultDataFolder();
   const steamDir = detectSteamDir();
   return {
     dataFolder,
@@ -217,6 +239,7 @@ function detectAddonBuilder() {
 module.exports = {
   DEFAULT_FILES,
   detectAddonBuilder,
+  mode,
   get,
   update,
   problem
