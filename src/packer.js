@@ -20,13 +20,33 @@ function cleanText(value) {
   return typeof value === 'string' ? value : '';
 }
 
+function cleanResign(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set();
+  const names = [];
+  value.forEach((item) => {
+    const name = cleanText(item).trim();
+    const key = name.toLowerCase();
+    if (!key.endsWith('.pbo') || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    names.push(name);
+  });
+  return names;
+}
+
 function cleanPack(value) {
   const pack = value && typeof value === 'object' ? value : {};
   return {
     id: cleanText(pack.id) || newId(),
     enabled: pack.enabled !== false,
     source: cleanText(pack.source).trim(),
-    prefix: cleanText(pack.prefix).trim()
+    prefix: cleanText(pack.prefix).trim(),
+    strip: cleanText(pack.strip).trim(),
+    stripOn: Boolean(pack.stripOn)
   };
 }
 
@@ -47,41 +67,13 @@ function cleanTemplate(value) {
     files: cleanText(template.files).trim(),
     binarize: Boolean(template.binarize),
     linkedModId: cleanText(template.linkedModId),
+    resign: cleanResign(template.resign),
     packs: Array.isArray(template.packs) ? template.packs.map(cleanPack) : []
   };
 }
 
-// The two templates every new install starts with. Paths that do not exist on this
-// machine stay in, they only show where things go.
-function builtinTemplates() {
-  const keyDir = path.join(os.homedir(), 'Desktop', 'PrivateKeys');
-  const dmeKey = path.join(keyDir, 'DeadmansEchoCore.biprivatekey');
-  return [
-    cleanTemplate({
-      id: 'builtin-revolutionza',
-      name: 'RevolutionZA',
-      note: 'RevolutionZA. Rev_Core and Rev_Lootconfig into workshop item 3480589933.',
-      builtin: true,
-      destination: 'M:\\Projects\\SteamUpdater\\MOD_DATA\\3480589933',
-      addonsFolder: 'addons',
-      keysFolder: 'keys',
-      packs: [
-        { source: 'c:\\Temp\\Build\\Rev_Core' },
-        { source: 'c:\\Temp\\Build\\Rev_Lootconfig' }
-      ]
-    }),
-    cleanTemplate({
-      id: 'builtin-deadmans-echo',
-      name: 'Deadmans-Echo',
-      note: 'Deadmans-Echo. Signed with the DeadmansEchoCore key, PBOs in Addons\\, key in key\\.',
-      builtin: true,
-      destination: path.join(settings.get().dataFolder, '3485942803', 'DeadmansEcho-Core'),
-      addonsFolder: 'Addons',
-      keysFolder: 'key',
-      privateKey: fs.existsSync(dmeKey) ? dmeKey : '',
-      packs: []
-    })
-  ];
+function withoutBuiltins(templates) {
+  return templates.filter((template) => !template.builtin);
 }
 
 function readTemplates() {
@@ -95,19 +87,24 @@ function readTemplates() {
     }
   }
   if (!data || !Array.isArray(data.templates)) {
-    const templates = builtinTemplates();
-    return writeTemplates({ templates, selectedId: templates[0].id });
+    return writeTemplates({ templates: [], selectedId: '' });
   }
-  const templates = data.templates.map(cleanTemplate);
-  return {
-    templates,
-    selectedId: cleanText(data.selectedId)
-  };
+  const templates = withoutBuiltins(data.templates.map(cleanTemplate));
+  const selectedId = templates.some((template) => template.id === cleanText(data.selectedId))
+    ? cleanText(data.selectedId)
+    : '';
+  if (templates.length !== data.templates.length) {
+    return writeTemplates({ templates, selectedId });
+  }
+  return { templates, selectedId };
 }
 
 function writeTemplates(payload) {
-  const templates = Array.isArray(payload && payload.templates) ? payload.templates.map(cleanTemplate) : [];
-  const data = { templates, selectedId: cleanText(payload && payload.selectedId) };
+  const templates = withoutBuiltins(Array.isArray(payload && payload.templates) ? payload.templates.map(cleanTemplate) : []);
+  const selectedId = templates.some((template) => template.id === cleanText(payload && payload.selectedId))
+    ? cleanText(payload && payload.selectedId)
+    : '';
+  const data = { templates, selectedId };
   const file = templatesFile();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
@@ -120,6 +117,16 @@ function addonBuilderPath() {
     return configured;
   }
   return settings.detectAddonBuilder();
+}
+
+// Removes a typed start, such as "client_", from a folder or prefix name.
+// Matching ignores case. The source folder on disk is left as it is.
+function applyStrip(name, strip) {
+  const token = String(strip || '');
+  if (!token || !String(name).toLowerCase().startsWith(token.toLowerCase())) {
+    return String(name || '');
+  }
+  return String(name).slice(token.length);
 }
 
 function readPrefix(source) {
@@ -182,10 +189,6 @@ function plan(input, only) {
     }
   }
   let publicKey = files.cleanFolderInput(template.publicKey);
-  if (!publicKey && privateKey) {
-    const sibling = privateKey.replace(/\.biprivatekey$/i, '.bikey');
-    publicKey = fs.existsSync(sibling) ? sibling : '';
-  }
   if (publicKey && !fs.existsSync(publicKey)) {
     problems.push(`Public key not found: ${publicKey}`);
   }
@@ -202,7 +205,18 @@ function plan(input, only) {
   const names = new Map();
   const packs = chosen.map((pack) => {
     const source = files.cleanFolderInput(pack.source);
-    const entry = { id: pack.id, source, name: source ? path.basename(source) : '', prefix: '', prefixFrom: '' };
+    const folderName = source ? path.basename(source) : '';
+    const strip = pack.stripOn ? cleanText(pack.strip) : '';
+    let name = folderName;
+    if (strip && folderName) {
+      const stripped = applyStrip(folderName, strip).trim();
+      if (!stripped) {
+        problems.push(`Stripping ${strip} from ${folderName} leaves no PBO name.`);
+      } else {
+        name = stripped;
+      }
+    }
+    const entry = { id: pack.id, source, name, prefix: '', prefixFrom: '' };
     if (!source) {
       problems.push('A pack has no source folder.');
       return entry;
@@ -214,14 +228,25 @@ function plan(input, only) {
     if (destination && (isInside(source, destination) || isInside(destination, source))) {
       problems.push(`Source and destination overlap: ${source}`);
     }
-    const key = entry.name.toLowerCase();
-    if (names.has(key)) {
-      problems.push(`Two packs would both write ${entry.name}.pbo: ${names.get(key)} and ${source}`);
+    const key = name.toLowerCase();
+    if (name && names.has(key)) {
+      problems.push(`Two packs would both write ${name}.pbo: ${names.get(key)} and ${source}`);
     }
-    names.set(key, source);
+    if (name) {
+      names.set(key, source);
+    }
     const found = pack.prefix ? { prefix: pack.prefix, from: 'template' } : readPrefix(source);
-    entry.prefix = found.prefix;
-    entry.prefixFrom = found.from;
+    let prefix = found.prefix;
+    let prefixFrom = found.from;
+    if (!pack.prefix && strip && prefix) {
+      const strippedPrefix = applyStrip(prefix, strip).trim();
+      if (strippedPrefix && strippedPrefix !== prefix) {
+        prefix = strippedPrefix;
+        prefixFrom = prefixFrom ? `${prefixFrom}, strip` : 'strip';
+      }
+    }
+    entry.prefix = prefix;
+    entry.prefixFrom = prefixFrom;
     entry.hasConfig = fs.existsSync(path.join(source, 'config.cpp')) || fs.existsSync(path.join(source, 'config.bin'));
     return entry;
   });
@@ -334,6 +359,97 @@ function runBuilder(builder, args, progress) {
   });
 }
 
+function signFilePath(builder) {
+  if (!builder) {
+    return '';
+  }
+  const file = path.join(path.dirname(path.dirname(builder)), 'DsUtils', 'DSSignFile.exe');
+  return fs.existsSync(file) ? file : '';
+}
+
+// Replaces every old bisign on a checked PBO with one from the private key.
+// The author's bisign stays until the new one exists.
+async function resignChecked(job, packedNames, say) {
+  const names = job.template.resign || [];
+  if (names.length === 0) {
+    return;
+  }
+  if (!job.privateKey) {
+    say('Use our bisign needs a private key. Those bisigns were left as they are.');
+    return;
+  }
+  const signer = signFilePath(job.builder);
+  if (!signer) {
+    say('DSSignFile.exe was not found next to DayZ Tools. Those bisigns were left as they are.');
+    return;
+  }
+  const keyName = path.basename(job.privateKey).replace(/\.biprivatekey$/i, '');
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    if (packedNames.has(name.toLowerCase())) {
+      continue;
+    }
+    const pbo = path.join(job.addons, name);
+    if (!fs.existsSync(pbo)) {
+      continue;
+    }
+    const expected = path.join(job.addons, `${name}.${keyName}.bisign`);
+    const run = await runBuilder(signer, [job.privateKey, pbo], say);
+    if (run.code !== 0 || !fs.existsSync(expected)) {
+      say(`  ${name} was not re-signed. The existing bisign was left in place.`);
+      continue;
+    }
+    listByExtension(job.addons, '.bisign')
+      .filter((fileName) => {
+        const full = path.join(job.addons, fileName);
+        return fileName.toLowerCase().startsWith(`${name.toLowerCase()}.`)
+          && path.resolve(full).toLowerCase() !== path.resolve(expected).toLowerCase();
+      })
+      .forEach((fileName) => fs.unlinkSync(path.join(job.addons, fileName)));
+    say(`  Re-signed ${name}. The previous bisign was removed.`);
+  }
+}
+
+// Signs one PBO with the private key and removes the previous bisign only after
+// the new one exists. A blank public key does not create a keys folder.
+async function resignPbo(pboFile, privateKeyFile, publicKeyFile) {
+  const pbo = files.cleanFolderInput(pboFile);
+  const privateKey = files.cleanFolderInput(privateKeyFile);
+  const publicKey = files.cleanFolderInput(publicKeyFile);
+  if (!pbo || !fs.existsSync(pbo) || !fs.statSync(pbo).isFile() || !pbo.toLowerCase().endsWith('.pbo')) {
+    throw new Error('That PBO is not in the addons folder.');
+  }
+  if (!privateKey || !fs.existsSync(privateKey) || !privateKey.toLowerCase().endsWith('.biprivatekey')) {
+    throw new Error('Use our bisign needs a private key.');
+  }
+  const signer = signFilePath(addonBuilderPath());
+  if (!signer) {
+    throw new Error('DSSignFile.exe was not found next to DayZ Tools.');
+  }
+  const addons = path.dirname(pbo);
+  const name = path.basename(pbo);
+  const keyName = path.basename(privateKey).replace(/\.biprivatekey$/i, '');
+  const expected = path.join(addons, `${name}.${keyName}.bisign`);
+  const keysBefore = new Set(listByExtension(addons, '.bikey'));
+  const run = await runBuilder(signer, [privateKey, pbo], () => {});
+  if (run.code !== 0 || !fs.existsSync(expected)) {
+    throw new Error(`${name} was not re-signed. The existing bisign was left in place.`);
+  }
+  listByExtension(addons, '.bisign')
+    .filter((fileName) => {
+      const full = path.join(addons, fileName);
+      return fileName.toLowerCase().startsWith(`${name.toLowerCase()}.`)
+        && path.resolve(full).toLowerCase() !== path.resolve(expected).toLowerCase();
+    })
+    .forEach((fileName) => fs.unlinkSync(path.join(addons, fileName)));
+  if (!publicKey) {
+    listByExtension(addons, '.bikey')
+      .filter((fileName) => !keysBefore.has(fileName))
+      .forEach((fileName) => fs.unlinkSync(path.join(addons, fileName)));
+  }
+  return { file: pbo, bisign: expected, keyName };
+}
+
 function mtime(file) {
   try {
     return fs.statSync(file).mtimeMs;
@@ -350,18 +466,75 @@ function listByExtension(folder, extension) {
   }
 }
 
+// Recreate deletes every file in the addons folder before the new PBOs are written.
+function clearAddonFiles(folder) {
+  if (!folder || !fs.existsSync(folder)) {
+    return 0;
+  }
+  let removed = 0;
+  fs.readdirSync(folder).forEach((name) => {
+    const full = path.join(folder, name);
+    if (fs.statSync(full).isFile()) {
+      fs.unlinkSync(full);
+      removed += 1;
+    }
+  });
+  return removed;
+}
+
 // Packs every ticked source of a template (or the one pack named by only) with
 // AddonBuilder into <destination>\<addons>, signs with the private key when one is
 // set, and puts the public key into <destination>\<keys>.
-async function pack(input, only, progress) {
+async function pack(input, only, progress, mode) {
   const say = typeof progress === 'function' ? progress : () => {};
   const job = plan(input, only);
+  const resignNames = (job.template.resign || []).filter(Boolean);
+  const signOnly = mode !== 'recreate' && !only
+    && job.problems.length === 1
+    && job.problems[0] === 'No pack is ticked.'
+    && resignNames.length > 0;
+  if (signOnly) {
+    if (!job.privateKey) {
+      const message = 'Use our bisign needs a private key.';
+      say(message);
+      return { ok: false, error: message, problems: [message], results: [] };
+    }
+    job.problems = [];
+    job.packs = [];
+  }
   if (job.problems.length > 0) {
     job.problems.forEach((problem) => say(problem));
     return { ok: false, error: job.problems[0], problems: job.problems, results: [] };
   }
 
   fs.mkdirSync(job.addons, { recursive: true });
+  if (mode === 'recreate') {
+    const removed = clearAddonFiles(job.addons);
+    say(removed
+      ? `Recreate: removed ${removed} file${removed === 1 ? '' : 's'} from ${job.addons}`
+      : `Recreate: ${job.addons} is already empty.`);
+  } else {
+    say('Override: existing PBOs stay, except the ones this pack writes.');
+  }
+  if (job.packs.length === 0) {
+    say('Signing the checked extra PBOs.');
+    const keysBefore = new Set(listByExtension(job.addons, '.bikey'));
+    await resignChecked(job, new Set(), say);
+    if (!job.publicKey) {
+      listByExtension(job.addons, '.bikey')
+        .filter((name) => !keysBefore.has(name))
+        .forEach((name) => fs.unlinkSync(path.join(job.addons, name)));
+    }
+    say('Sign finished.');
+    return {
+      ok: true,
+      error: '',
+      destination: job.destination,
+      addons: job.addons,
+      keys: job.keys,
+      results: []
+    };
+  }
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'steam-updater-pack-'));
   const includeFile = path.join(work, 'include.lst');
   fs.writeFileSync(includeFile, `${patternList(job.files).join(';')}\n`, 'utf8');
@@ -449,29 +622,46 @@ async function pack(input, only, progress) {
     say(error ? `  FAILED ${error}` : `  ok ${entry.name}.pbo (${Math.max(1, Math.round(size / 1024))} KB${signed ? ', signed' : ''})`);
   }
 
-  // AddonBuilder copies the public key next to the PBOs. It belongs in keys\.
+  // A public key is the only reason a keys folder exists. AddonBuilder drops a
+  // .bikey beside the new PBOs; that file is moved into keys when a public key
+  // is set, and deleted when the field is blank.
   const keyMessages = [];
-  if (job.privateKey) {
-    fs.mkdirSync(job.keys, { recursive: true });
-    listByExtension(job.addons, '.bikey')
-      .filter((name) => !keysBefore.has(name))
-      .forEach((name) => {
-        const from = path.join(job.addons, name);
-        const to = path.join(job.keys, name);
-        fs.copyFileSync(from, to);
-        fs.unlinkSync(from);
-        keyMessages.push(`Moved ${name} to ${job.keys}`);
-      });
-  }
+  const dropped = listByExtension(job.addons, '.bikey').filter((name) => !keysBefore.has(name));
   if (job.publicKey) {
     fs.mkdirSync(job.keys, { recursive: true });
+    dropped.forEach((name) => {
+      const from = path.join(job.addons, name);
+      const to = path.join(job.keys, name);
+      fs.copyFileSync(from, to);
+      fs.unlinkSync(from);
+      keyMessages.push(`Moved ${name} to ${job.keys}`);
+    });
     const to = path.join(job.keys, path.basename(job.publicKey));
     if (path.resolve(to).toLowerCase() !== path.resolve(job.publicKey).toLowerCase()) {
       fs.copyFileSync(job.publicKey, to);
       keyMessages.push(`Copied ${path.basename(job.publicKey)} to ${job.keys}`);
     }
+  } else {
+    dropped.forEach((name) => fs.unlinkSync(path.join(job.addons, name)));
+    if (job.privateKey) {
+      keyMessages.push('No public key, so the keys folder was not created.');
+    }
   }
   keyMessages.forEach((line) => say(line));
+
+  const packedNames = new Set(results.filter((result) => result.ok).map((result) => `${result.name}.pbo`.toLowerCase()));
+  if (mode === 'recreate') {
+    if ((job.template.resign || []).length > 0) {
+      say('Recreate removed the other PBOs, so Use our bisign was not run.');
+    }
+  } else {
+    await resignChecked(job, packedNames, say);
+    if (!job.publicKey) {
+      listByExtension(job.addons, '.bikey')
+        .filter((name) => !keysBefore.has(name))
+        .forEach((name) => fs.unlinkSync(path.join(job.addons, name)));
+    }
+  }
 
   fs.rmSync(work, { recursive: true, force: true });
   const failed = results.filter((result) => !result.ok);
@@ -493,5 +683,6 @@ module.exports = {
   pack,
   plan,
   readTemplates,
+  resignPbo,
   writeTemplates
 };

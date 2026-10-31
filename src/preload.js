@@ -37,8 +37,8 @@ contextBridge.exposeInMainWorld('updater', {
   packPlan(template, only) {
     return ipcRenderer.invoke('pack:plan', template, only);
   },
-  pack(template, only) {
-    return ipcRenderer.invoke('pack:run', template, only);
+  pack(template, only, mode) {
+    return ipcRenderer.invoke('pack:run', template, only, mode);
   },
   onPackProgress(callback) {
     const listener = (_event, line) => callback(line);
@@ -63,8 +63,17 @@ contextBridge.exposeInMainWorld('updater', {
   readFiles(folder) {
     return ipcRenderer.invoke('files:read', folder);
   },
-  checkSignatures(folder) {
-    return ipcRenderer.invoke('files:signatures', folder);
+  checkSignatures(folder, ownKey) {
+    return ipcRenderer.invoke('files:signatures', folder, ownKey);
+  },
+  attachBisign(pbo, bisign) {
+    return ipcRenderer.invoke('files:attach-bisign', pbo, bisign);
+  },
+  removePbo(pbo) {
+    return ipcRenderer.invoke('files:remove-pbo', pbo);
+  },
+  resignPbo(pbo, privateKey, publicKey) {
+    return ipcRenderer.invoke('pack:resign', pbo, privateKey, publicKey);
   },
   folderOf(target) {
     return ipcRenderer.invoke('files:folder-of', target);
@@ -80,6 +89,9 @@ contextBridge.exposeInMainWorld('updater', {
   },
   pullAll() {
     return ipcRenderer.invoke('steam:pull-all');
+  },
+  repull(publishedId, title) {
+    return ipcRenderer.invoke('steam:repull', publishedId, title);
   },
   upload(mod) {
     return ipcRenderer.invoke('steam:upload', mod);

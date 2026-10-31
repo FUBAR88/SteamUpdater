@@ -91,7 +91,7 @@ function rememberImported(rows) {
         mod.displayName = row.title;
       }
     }
-    if (row.contentFolder && !mod.contentFolder) {
+    if (row.contentFolder && (row.status === 'updated' || row.status === 'copied' || !mod.contentFolder)) {
       mod.contentFolder = row.contentFolder;
     }
     if (row.previewImage) {

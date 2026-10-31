@@ -107,7 +107,7 @@ The values land in the app's library. The files themselves are not changed until
 
 The **Pack** tab in the title bar packs your source folders into PBOs and writes them straight into a mod folder, so nothing has to be copied into `MOD_DATA` by hand. It uses AddonBuilder from DayZ Tools.
 
-- **Templates** (left): a template holds any number of source folders, each becomes one PBO named after its folder. `RevolutionZA` and `Deadmans-Echo` come built in and stay as they are. **Save as own** copies one with your own name and custom text, which you can then change freely. Templates are stored in `MOD_DATA\pack_templates.json`.
+- **Templates** (left): a template holds any number of source folders, each becomes one PBO named after its folder. The list starts empty. **New template** adds one. **Save as own** copies the open one with your own name and custom text. Templates are stored in `MOD_DATA\pack_templates.json` on this machine. None are shipped with the app.
 - **Config** (middle): the pack folders (tick the ones the Pack button builds, or pack one row on its own), the prefix (empty: from `$PBOPREFIX$` or `$PREFIX$` in the folder, else the folder name), the files AddonBuilder copies without binarizing, an exclusion list file, extra exclusion patterns, and Binarize (off: pack only).
 - **Destination** (right): any folder, or a mod from the updater list, which uses its content folder. The PBOs go into its addons folder, the public key into its keys folder (both names can be changed, e.g. `Addons` and `key`). With a private key every PBO is signed. The private key must not be inside the destination, and a `.biprivatekey` is never packed.
 

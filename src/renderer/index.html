@@ -26,6 +26,9 @@
         <span id="update-version" class="update-version"></span>
         <span id="update-dot" class="update-dot" hidden></span>
       </button>
+      <button id="window-refresh" class="window-button" type="button" title="Refresh" aria-label="Refresh">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A8 8 0 1 0 19.7 15h-2.1a6 6 0 1 1-1.6-6.2L13 12h8V4l-3.35 2.35z"/></svg>
+      </button>
       <button id="window-minimize" class="window-button" type="button" title="Minimize" aria-label="Minimize">
         <svg viewBox="0 0 12 12" aria-hidden="true"><path fill="currentColor" d="M1 6h10v1H1z"/></svg>
       </button>
@@ -116,7 +119,7 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 4.9-4.9 1.4 1.4-6.3 6.3z"/></svg>
               </button>
             </span>
-            <p class="hint">The folder with addons\ and keys\. Paste a path or drop the folder here. Press Enter or the shield to check that every .pbo is signed and keys\ holds the matching .bikey.</p>
+            <p class="hint">The folder with addons\. Paste a path or drop the folder here. Press Enter or the shield to check that every .pbo has a current bisign. A third-party key is listed on its own. A keys folder is only for a public mod.</p>
             <div id="signature-report" class="signature-report" aria-live="polite" hidden></div>
           </div>
           <div class="workshop-layout">
@@ -223,6 +226,9 @@
           <button id="open-mod-folder" class="icon" type="button" title="Open mod folder" aria-label="Open mod folder">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6z"/></svg>
           </button>
+          <button id="repull-mod" class="icon" type="button" title="Re-Pull this mod only" aria-label="Re-Pull this mod only">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 3h2v9.2l2.6-2.6 1.4 1.4L12 16l-5-4.99 1.4-1.42L11 12.2V3zM5 18h14v2H5v-2z"/></svg>
+          </button>
           <button id="push-mod" class="icon" type="button" title="Push (Ctrl+Enter)" aria-label="Push">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 16h2V6.8l2.6 2.6 1.4-1.4L12 3 6.99 8l1.42 1.4L11 6.8V16zM5 18h14v2H5v-2z"/></svg>
           </button>
@@ -246,7 +252,7 @@
         <button id="pack-delete" class="icon danger" type="button" title="Delete template" aria-label="Delete template"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2zM4 5h16v2H4V5z"/></svg></button>
       </div>
       <nav id="pack-template-list" class="mod-list" aria-label="Templates"></nav>
-      <p class="sidebar-note">A template packs any number of folders, each into its own PBO, and puts them into the destination. Built-in templates stay as they are. Save as own to change them.</p>
+      <p class="sidebar-note">A template packs any number of folders, each into its own PBO, and puts them into the destination. The list starts empty. New template adds one.</p>
     </aside>
     <main class="workspace pack-config">
       <section class="panel">
@@ -259,7 +265,11 @@
       </section>
       <section id="pack-packs" class="panel pack-packs">
         <h2>Packs</h2>
-        <p class="hint">Each folder becomes one PBO, named after the folder. The prefix comes from $PBOPREFIX$ or $PREFIX$ in the folder, else the folder name. Drop folders here to add them.</p>
+        <p class="hint">Each folder becomes one PBO, named after the folder. The settings icon sets the prefix and an optional strip. Drop folders here to add them.</p>
+        <div class="pack-tick-all">
+          <button id="pack-check-all" type="button">Check all</button>
+          <button id="pack-uncheck-all" type="button">Uncheck all</button>
+        </div>
         <div id="pack-rows" class="pack-rows"></div>
         <div class="pack-rows-foot">
           <button id="pack-add" type="button">Add pack folder</button>
@@ -268,13 +278,18 @@
       <section class="panel">
         <h2>Files and exclusions</h2>
         <div class="grid">
-          <label class="span-2"><span class="label-line">Files to copy directly</span><textarea id="pack-files" rows="3" spellcheck="false"></textarea><span class="field-hint">Left empty, the Files template from Settings is used.</span></label>
+          <div class="span-2 change-note"><span class="note-head"><label for="pack-files">Files to copy directly</label><button id="pack-files-default" class="icon" type="button" title="Use default" aria-label="Use default"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5zM8 12h8v1.5H8V12zm0 3h8v1.5H8V15zm0 3h5v1.5H8V18z"/></svg></button></span><textarea id="pack-files" rows="3" spellcheck="false"></textarea><span class="field-hint">Left empty, the Files template from Settings is used.</span></div>
           <div class="span-2"><label class="path-field" for="pack-exclude-file"><span class="label-line">Exclusion list</span></label><span class="path-row"><input id="pack-exclude-file" type="text" autocomplete="off" spellcheck="false" placeholder="Empty: only the exclude.lst of DayZ Tools"><button id="pack-exclude-file-browse" class="icon" type="button" title="Choose exclusion list" aria-label="Choose exclusion list"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5z"/></svg></button></span><span class="field-hint">A .lst file with one pattern per line, like exclude.lst in DayZ Tools. AddonBuilder always applies its own exclude.lst as well.</span></div>
           <label class="span-2"><span class="label-line">Extra exclusions</span><textarea id="pack-exclude" rows="3" spellcheck="false" placeholder="*.psd&#10;*\Source\*&#10;notes.txt"></textarea><span class="field-hint">One pattern per line or separated by ;. A .biprivatekey is never packed.</span></label>
           <div class="span-2">
             <button id="pack-binarize" class="switch" type="button" role="switch" aria-checked="false"><span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span><span>Binarize (off: pack only)</span></button>
           </div>
         </div>
+      </section>
+      <section id="extra-pbos" class="panel">
+        <h2>Extra PBOs</h2>
+        <p class="hint">PBOs in the addons folder that the pack rows do not produce. Green means a current bisign is next to the PBO. Red means there is no bisign, or the PBO is newer than its bisign.</p>
+        <div id="extra-pbo-list" class="extra-pbo-list"></div>
       </section>
     </main>
     <aside class="workspace pack-destination">
@@ -286,14 +301,13 @@
           <label><span class="label-line">Addons folder</span><input id="pack-addons" type="text" autocomplete="off" spellcheck="false" placeholder="addons"></label>
           <label><span class="label-line">Keys folder</span><input id="pack-keys" type="text" autocomplete="off" spellcheck="false" placeholder="keys"></label>
           <div class="span-2"><label class="path-field" for="pack-private-key"><span class="label-line">Private key</span></label><span class="path-row"><input id="pack-private-key" type="text" autocomplete="off" spellcheck="false" placeholder="Empty: the PBOs stay unsigned"><button id="pack-private-key-browse" class="icon" type="button" title="Choose .biprivatekey" aria-label="Choose .biprivatekey"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5z"/></svg></button></span><span class="field-hint">Signs every PBO. Keep it outside the destination, it must never be uploaded.</span></div>
-          <div class="span-2"><label class="path-field" for="pack-public-key"><span class="label-line">Public key</span></label><span class="path-row"><input id="pack-public-key" type="text" autocomplete="off" spellcheck="false" placeholder="Empty: the .bikey next to the private key"><button id="pack-public-key-browse" class="icon" type="button" title="Choose .bikey" aria-label="Choose .bikey"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5z"/></svg></button></span><span class="field-hint">Copied into the keys folder.</span></div>
+          <div class="span-2"><label class="path-field" for="pack-public-key"><span class="label-line">Public key</span></label><span class="path-row"><input id="pack-public-key" type="text" autocomplete="off" spellcheck="false" placeholder="Empty: no keys folder"><button id="pack-public-key-browse" class="icon" type="button" title="Choose .bikey" aria-label="Choose .bikey"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5z"/></svg></button></span><span class="field-hint">Empty: no keys folder. The server pack stays private. Set a key only for a public mod.</span></div>
         </div>
         <div id="pack-summary" class="pack-summary" aria-live="polite"></div>
         <div class="pack-actions">
           <button id="pack-run" class="primary pack-button" type="button" title="Pack every ticked folder (Ctrl+Enter)">Pack</button>
           <button id="pack-goto-mod" type="button" title="Open the linked mod in the Workshop view" hidden>Open in Workshop</button>
         </div>
-        <div id="pack-signature" class="signature-report" aria-live="polite" hidden></div>
       </section>
       <pre id="pack-log" class="log" aria-live="polite"></pre>
     </aside>
@@ -397,7 +411,38 @@
       </div>
     </form>
   </div>
-  <div id="pack-delete-modal" class="modal" hidden>
+  <div id="pack-row-modal" class="modal" hidden>
+    <form id="pack-row-form" class="modal-card">
+      <h2>Pack folder</h2>
+      <label>Prefix
+        <input id="pack-row-prefix" type="text" autocomplete="off" spellcheck="false" placeholder="auto">
+        <span class="field-hint">DayZ's name inside the PBO. Auto reads $PBOPREFIX$ or $PREFIX$ in the folder. If neither file is there, the folder name is used.</span>
+      </label>
+      <div class="strip-line">
+        <input id="pack-row-strip-on" type="checkbox" title="Use the strip" aria-label="Use the strip">
+        <label for="pack-row-strip">Strip</label>
+        <input id="pack-row-strip" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. client_">
+      </div>
+      <span class="field-hint">Removed from the start of the folder name when the box is ticked. client_Mymod with client_ packs as Mymod.pbo. The folder on disk is not renamed.</span>
+      <p id="pack-row-result" class="hint"></p>
+      <div class="modal-actions">
+        <button id="pack-row-cancel" class="icon" type="button" title="Cancel" aria-label="Cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg></button>
+        <button id="pack-row-ok" class="icon" type="submit" title="Save" aria-label="Save"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg></button>
+      </div>
+    </form>
+  </div>
+  <div id="pack-mode-modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pack-mode-title">
+      <h2 id="pack-mode-title">Pack</h2>
+      <p><strong>Override</strong> writes only the PBOs in this pack. A PBO with the same name is replaced and signed again. The other PBOs in the folder stay.</p>
+      <p><strong>Recreate</strong> deletes every file in the addons folder, then writes only the PBOs in this pack.</p>
+      <div class="modal-actions">
+        <button id="pack-mode-cancel" class="icon" type="button" title="Cancel" aria-label="Cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg></button>
+        <button id="pack-mode-override" class="primary" type="button">Override</button>
+        <button id="pack-mode-recreate" type="button">Recreate</button>
+      </div>
+    </div>
+  </div>
     <form id="pack-delete-form" class="modal-card">
       <h2>Delete template</h2>
       <p>Delete <strong id="pack-delete-name"></strong>? The packed PBOs stay where they are.</p>

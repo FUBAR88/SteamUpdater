@@ -90,6 +90,7 @@ function createWindow() {
     // Transparent and frameless: the page draws the window outline itself.
     backgroundColor: '#00000000',
     title: 'Steam Updater',
+    icon: path.join(__dirname, 'favicon.ico'),
     frame: false,
     transparent: true,
     webPreferences: {
@@ -152,6 +153,20 @@ async function withWorkshopPage(row) {
   return row;
 }
 
+function syncProgress(item, result) {
+  const name = item.title || item.publishedId;
+  if (result.status === 'unchanged') {
+    return `${name} already matches the workshop download.`;
+  }
+  if (result.status === 'copied') {
+    return `${name} copied into MOD_DATA.`;
+  }
+  if (result.status === 'updated') {
+    return `${name}: ${result.detail}`;
+  }
+  return `${name}: ${result.error || result.status}`;
+}
+
 async function pullItems(items) {
   const imported = [];
   const missing = [];
@@ -159,10 +174,11 @@ async function pullItems(items) {
     const item = items[index];
     const installed = workshop.findInstalled(item.publishedId);
     if (installed) {
-      sendProgress(`Copying ${item.title || item.publishedId} into MOD_DATA`);
+      sendProgress(`Checking ${item.title || item.publishedId}`);
       const copied = await withWorkshopPage(await workshop.importItem(item, installed));
       imported.push(copied);
       library.rememberImported([copied]);
+      sendProgress(syncProgress(item, copied));
     } else {
       missing.push(item);
     }
@@ -183,10 +199,11 @@ async function pullItems(items) {
     const item = missing[index];
     const row = byId.get(String(item.publishedId));
     if (row && row.installPath) {
-      sendProgress(`Copying ${item.title || item.publishedId} into MOD_DATA`);
+      sendProgress(`Checking ${item.title || item.publishedId}`);
       const copied = await withWorkshopPage(await workshop.importItem(item, row.installPath));
       imported.push(copied);
       library.rememberImported([copied]);
+      sendProgress(syncProgress(item, copied));
     } else if (!fetched.ok) {
       imported.push(await workshop.importItem(item, ''));
       imported[imported.length - 1].error = fetched.error || imported[imported.length - 1].error;
@@ -267,7 +284,8 @@ app.whenReady().then(() => {
       privateKey: [{ name: 'BI private key', extensions: ['biprivatekey'] }],
       publicKey: [{ name: 'BI public key', extensions: ['bikey'] }],
       exclude: [{ name: 'Exclusion list', extensions: ['lst', 'txt'] }, { name: 'All files', extensions: ['*'] }],
-      exe: [{ name: 'Program', extensions: ['exe'] }]
+      exe: [{ name: 'Program', extensions: ['exe'] }],
+      bisign: [{ name: 'Bisign', extensions: ['bisign'] }]
     }[kind] || [{ name: 'All files', extensions: ['*'] }];
     const options = {
       title: typeof title === 'string' && title.trim() ? title.trim() : 'Choose a file',
@@ -297,13 +315,13 @@ app.whenReady().then(() => {
       problems: job.problems
     };
   });
-  ipcMain.handle('pack:run', async (_event, template, only) => {
+  ipcMain.handle('pack:run', async (_event, template, only, mode) => {
     if (packing) {
       return { ok: false, error: 'A pack is already running.', results: [] };
     }
     packing = true;
     try {
-      return await packer.pack(template, only || '', sendPackProgress);
+      return await packer.pack(template, only || '', sendPackProgress, mode === 'recreate' ? 'recreate' : 'override');
     } catch (error) {
       sendPackProgress(`Pack failed. ${error.message}`);
       return { ok: false, error: error.message, results: [] };
@@ -396,7 +414,10 @@ app.whenReady().then(() => {
   ipcMain.handle('files:write', (_event, mod) => files.writeModFiles(mod));
   ipcMain.handle('files:read', (_event, folder) => files.readModFiles(folder));
   ipcMain.handle('files:mod-image-path', (_event, file, folder) => files.modImagePath(file, folder));
-  ipcMain.handle('files:signatures', (_event, folder) => files.checkSignatures(folder));
+  ipcMain.handle('files:signatures', (_event, folder, ownKey) => files.checkSignatures(folder, ownKey));
+  ipcMain.handle('files:attach-bisign', (_event, pbo, bisign) => files.attachBisign(pbo, bisign));
+  ipcMain.handle('files:remove-pbo', (_event, pbo) => files.removePbo(pbo));
+  ipcMain.handle('pack:resign', (_event, pbo, privateKey, publicKey) => packer.resignPbo(pbo, privateKey, publicKey));
   ipcMain.handle('files:folder-of', (_event, target) => files.folderOf(target));
   ipcMain.handle('shell:open-folder', async (_event, folder) => {
     const target = files.cleanFolderInput(folder);
@@ -454,9 +475,39 @@ app.whenReady().then(() => {
     const dismissed = new Set((library.readLibrary().dismissed || []).map(String));
     const wanted = (listed.items || []).filter((item) => !dismissed.has(String(item.publishedId)));
     const imported = await pullItems(wanted);
-    const kept = imported.filter((item) => item.status === 'copied' || item.status === 'kept').length;
-    sendProgress(`Pull finished. ${kept} mods in the library, ${imported.length - kept} skipped.`);
+    const updated = imported.filter((item) => item.status === 'copied' || item.status === 'updated').length;
+    const same = imported.filter((item) => item.status === 'unchanged' || item.status === 'kept').length;
+    sendProgress(`Pull finished. ${updated} updated, ${same} already in sync, ${imported.length - updated - same} skipped.`);
     return { ...listed, imported };
+  });
+  ipcMain.handle('steam:repull', async (_event, publishedId, title) => {
+    const id = String(publishedId || '').trim();
+    if (!/^\d+$/.test(id)) {
+      return { ok: false, error: 'This mod has no published file id.' };
+    }
+    sendProgress(`Re-pull ${title || id}`);
+    let installed = workshop.findInstalled(id);
+    if (!installed) {
+      sendProgress(`Asking Steam to download ${id}.`);
+      const fetched = await steam.runHelper(steam.buildFetchRequest([id]), sendProgress, 60 * 60 * 1000);
+      const row = (fetched.items || []).find((item) => String(item.publishedId) === id);
+      installed = row && row.installPath ? row.installPath : '';
+      if (!installed) {
+        const message = (row && row.error) || (fetched && fetched.error) || 'Steam has not downloaded this workshop item.';
+        sendProgress(`Re-pull failed. ${message}`);
+        return { ok: false, error: message, imported: [] };
+      }
+    }
+    sendProgress(`Checking MOD_DATA\\${id}`);
+    const copied = await withWorkshopPage(await workshop.importItem({ publishedId: id, title: title || '' }, installed));
+    if (copied.status !== 'copied' && copied.status !== 'updated' && copied.status !== 'unchanged') {
+      const message = copied.error || 'Re-pull failed.';
+      sendProgress(`Re-pull failed. ${message}`);
+      return { ok: false, error: message, imported: [copied] };
+    }
+    library.rememberImported([copied]);
+    sendProgress(syncProgress({ title: title || id, publishedId: id }, copied));
+    return { ok: true, imported: [copied] };
   });
   ipcMain.handle('steam:upload', async (_event, mod) => {
     const workshop = (mod && mod.workshop) || {};

@@ -200,10 +200,79 @@ function locateModParts(folder) {
   return { root: folder, addons: folder };
 }
 
-// Checks every .pbo for a .bisign next to it, and that the signing key is in keys\.
-// It does not recompute the signature hashes, so a .bisign older than its .pbo is
-// reported as outdated: the PBO was rebuilt after it was signed.
-function checkSignatures(input) {
+// A current bisign is signed even when its .bikey is not in the mod. A server pack
+// often has no keys folder: the key stays on the server. A bisign whose key name is
+// not ownKey is third-party and is not a warning. ownKey is the private key's name.
+function pboSignatureStatus(signatures, own) {
+  if (signatures.length === 0) {
+    return 'unsigned';
+  }
+  const current = signatures.filter((sig) => !sig.outdated);
+  if (current.length === 0) {
+    return 'outdated';
+  }
+  const usable = current.filter((sig) => !sig.nameOnly);
+  if (usable.length === 0) {
+    return 'key-mismatch';
+  }
+  if (own && usable.some((sig) => sig.keyName.toLowerCase() === own)) {
+    return 'signed';
+  }
+  if (own) {
+    return 'prepacked';
+  }
+  return 'signed';
+}
+
+// Deletes one PBO and every bisign that belongs to it. The keys folder is left alone.
+function removePbo(file) {
+  const pbo = cleanFolderInput(file);
+  if (!pbo || !fs.existsSync(pbo) || !fs.statSync(pbo).isFile() || !pbo.toLowerCase().endsWith('.pbo')) {
+    throw new Error('That PBO is not in the addons folder.');
+  }
+  const dir = path.dirname(pbo);
+  const base = path.basename(pbo);
+  const prefix = `${base.toLowerCase()}.`;
+  const removed = [];
+  fs.readdirSync(dir).forEach((name) => {
+    const full = path.join(dir, name);
+    if (!fs.statSync(full).isFile()) {
+      return;
+    }
+    const lower = name.toLowerCase();
+    if (lower === base.toLowerCase() || (lower.startsWith(prefix) && lower.endsWith('.bisign'))) {
+      fs.unlinkSync(full);
+      removed.push(name);
+    }
+  });
+  return { file: pbo, removed };
+}
+
+// Copies a .bisign next to a PBO. A file named Key.bisign becomes Name.pbo.Key.bisign.
+function attachBisign(pboFile, bisignFile) {
+  const pbo = cleanFolderInput(pboFile);
+  const source = cleanFolderInput(bisignFile);
+  if (!pbo || !fs.existsSync(pbo) || !fs.statSync(pbo).isFile() || !pbo.toLowerCase().endsWith('.pbo')) {
+    throw new Error('Choose a .pbo to attach the bisign to.');
+  }
+  if (!source || !fs.existsSync(source) || !fs.statSync(source).isFile() || !source.toLowerCase().endsWith('.bisign')) {
+    throw new Error('Choose a .bisign file.');
+  }
+  const pboName = path.basename(pbo);
+  let destName = path.basename(source);
+  if (!destName.toLowerCase().startsWith(`${pboName.toLowerCase()}.`)) {
+    destName = `${pboName}.${destName}`;
+  }
+  const dest = path.join(path.dirname(pbo), destName);
+  fs.copyFileSync(source, dest);
+  return dest;
+}
+
+// Checks every .pbo for a current .bisign. The .bikey does not have to be in keys\.
+// A .bisign older than its .pbo is outdated: the PBO was rebuilt after it was signed.
+function checkSignatures(input, ownKeyName) {
+  const ownLabel = String(ownKeyName || '').trim().replace(/\.biprivatekey$/i, '');
+  const own = ownLabel.toLowerCase();
   const folder = cleanFolderInput(input);
   if (!folder) {
     throw new Error('Enter or paste a mod folder path.');
@@ -246,20 +315,7 @@ function checkSignatures(input) {
           outdated: fs.statSync(sig).mtimeMs + 2000 < pboTime
         };
       });
-    let status = 'signed';
-    if (signatures.length === 0) {
-      status = 'unsigned';
-    } else if (!signatures.some((sig) => sig.keyFound)) {
-      if (keys.length === 0) {
-        status = 'no-key';
-      } else if (signatures.some((sig) => sig.nameOnly)) {
-        status = 'key-mismatch';
-      } else {
-        status = 'unknown-key';
-      }
-    } else if (signatures.filter((sig) => sig.keyFound).every((sig) => sig.outdated)) {
-      status = 'outdated';
-    }
+    const status = pboSignatureStatus(signatures, own);
     return { file, name: path.basename(file), status, signatures };
   });
 
@@ -277,6 +333,8 @@ function checkSignatures(input) {
   });
 
   const signed = pbos.filter((pbo) => pbo.status === 'signed').length;
+  const prepacked = pbos.filter((pbo) => pbo.status === 'prepacked').length;
+  const problems = pbos.filter((pbo) => pbo.status !== 'signed' && pbo.status !== 'prepacked');
   return {
     folder,
     root,
@@ -285,8 +343,10 @@ function checkSignatures(input) {
     keyIssues,
     pbos,
     signed,
+    prepacked,
+    ownKey: ownLabel,
     total: pbos.length,
-    ok: signed === pbos.length && keyIssues.length === 0
+    ok: problems.length === 0 && keyIssues.length === 0
   };
 }
 
@@ -409,6 +469,8 @@ function modImagePath(file, contentFolder) {
 module.exports = {
   MOD_FIELDS,
   checkSignatures,
+  attachBisign,
+  removePbo,
   cleanFolderInput,
   dateTimeToBinaryUtc,
   escapeQuoted,

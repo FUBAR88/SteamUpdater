@@ -305,6 +305,7 @@ function cleanPath(value) {
 
 const signatureStates = {
   signed: 'Signed',
+  prepacked: 'Prepacked',
   unsigned: 'Not signed',
   outdated: 'Outdated',
   'no-key': 'No .bikey',
@@ -320,14 +321,81 @@ const signatureHelp = {
   'key-mismatch': 'keys\\ has a .bikey with this name, but it is a different key. Ship the .bikey this PBO was signed with'
 };
 
+const SIGN_LINK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10.6 13.4a1 1 0 0 1 0-1.4l2.8-2.8a3 3 0 0 1 4.2 4.2l-1.4 1.4-1.4-1.4 1.4-1.4a1 1 0 1 0-1.4-1.4l-2.8 2.8a1 1 0 0 1-1.4 0zm2.8-2.8a1 1 0 0 1 0 1.4l-2.8 2.8a3 3 0 1 1-4.2-4.2l1.4-1.4 1.4 1.4-1.4 1.4a1 1 0 0 0 1.4 1.4l2.8-2.8a1 1 0 0 1 1.4 0z"/></svg>';
+
+function realSignatureProblems(report) {
+  return (report.pbos || []).filter((pbo) => pbo.status !== 'signed' && pbo.status !== 'prepacked');
+}
+
 // One sentence for the push question, from the PBOs and from keys\.
 function signatureProblem(report) {
   const parts = [];
-  if (report.signed < report.total) {
-    parts.push(`${report.total - report.signed} of ${report.total} PBOs are not signed correctly.`);
+  const bad = realSignatureProblems(report);
+  if (bad.length) {
+    parts.push(`${bad.length} of ${report.total} PBOs are not signed correctly.`);
   }
   (report.keyIssues || []).forEach((issue) => parts.push(issue));
   return parts.join(' ');
+}
+
+function signatureSummaryText(report) {
+  const bad = realSignatureProblems(report);
+  const keyIssues = report.keyIssues || [];
+  if (bad.length) {
+    return `${bad.length} of ${report.total} PBOs are not signed correctly.`;
+  }
+  if (report.prepacked) {
+    const key = report.ownKey ? ` with ${report.ownKey}` : '';
+    return `${report.signed} signed${key}. ${report.prepacked} keep a third-party key.`;
+  }
+  if (keyIssues.length) {
+    return `All ${report.total} PBOs are signed, but keys\\ needs a look.`;
+  }
+  return `All ${report.total} PBOs are signed.`;
+}
+
+function signatureDetail(pbo) {
+  const keyNames = pbo.signatures.map((sig) => sig.keyName).filter(Boolean);
+  if (pbo.status === 'prepacked') {
+    return keyNames.length ? `third-party key ${keyNames.join(', ')}` : 'third-party key';
+  }
+  if (pbo.status === 'signed') {
+    return keyNames.length ? `key ${keyNames.join(', ')}` : '';
+  }
+  return signatureHelp[pbo.status] || '';
+}
+
+function appendSignatureRows(list, pbos, options) {
+  pbos.forEach((pbo) => {
+    const item = document.createElement('li');
+    if (options && options.onResign) {
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.className = 'sig-sign';
+      box.title = 'Sign on pack. The current bisign is removed and replaced.';
+      box.checked = (options.resign || []).some((name) => name.toLowerCase() === pbo.name.toLowerCase());
+      box.addEventListener('change', () => options.onResign(pbo.name, box.checked));
+      item.append(box);
+    }
+    const state = document.createElement('span');
+    state.className = `sig-state ${pbo.status}`;
+    state.textContent = signatureStates[pbo.status] || pbo.status;
+    const name = document.createElement('span');
+    const detail = signatureDetail(pbo);
+    name.textContent = detail ? `${pbo.name} (${detail})` : pbo.name;
+    item.append(state, name);
+    if (pbo.status === 'unsigned' && options && options.onLink) {
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'icon sig-link';
+      link.title = 'Link a bisign for this PBO';
+      link.setAttribute('aria-label', 'Link a bisign for this PBO');
+      link.innerHTML = SIGN_LINK_ICON;
+      link.addEventListener('click', () => options.onLink(pbo));
+      item.append(link);
+    }
+    list.append(item);
+  });
 }
 
 let signatureCheck = 0;
@@ -339,45 +407,81 @@ function clearSignatureReport() {
   signatureReport.replaceChildren();
 }
 
-function showSignatureReport(report) {
-  signatureReport.replaceChildren();
-  signatureReport.className = `signature-report ${report.ok ? 'is-ok' : 'is-bad'}`;
+function fillSignatureReport(element, report, options) {
+  element.replaceChildren();
+  element.className = `signature-report ${report.ok ? 'is-ok' : 'is-bad'}`;
   const summary = document.createElement('p');
   summary.className = 'sig-summary';
-  const keyIssues = report.keyIssues || [];
-  if (report.signed < report.total) {
-    summary.textContent = `${report.total - report.signed} of ${report.total} PBOs are not signed correctly.`;
-  } else if (keyIssues.length) {
-    summary.textContent = `All ${report.total} PBOs are signed, but keys\\ needs a look.`;
-  } else {
-    summary.textContent = `All ${report.total} PBOs are signed with the key in keys\\.`;
-  }
+  summary.textContent = signatureSummaryText(report);
   const keys = document.createElement('p');
   keys.className = 'sig-keys';
   keys.textContent = report.keys.length
     ? `Keys: ${report.keys.map((key) => key.name || '(unnamed)').join(', ')} · ${report.addons}`
-    : `No .bikey in ${report.root}\\keys · ${report.addons}`;
-  const list = document.createElement('ul');
-  report.pbos.forEach((pbo) => {
-    const item = document.createElement('li');
-    const state = document.createElement('span');
-    state.className = `sig-state ${pbo.status}`;
-    state.textContent = signatureStates[pbo.status] || pbo.status;
-    const name = document.createElement('span');
-    const keyNames = pbo.signatures.map((sig) => sig.keyName).filter(Boolean);
-    const detail = signatureHelp[pbo.status] || (keyNames.length ? `key ${keyNames.join(', ')}` : '');
-    name.textContent = detail ? `${pbo.name} (${detail})` : pbo.name;
-    item.append(state, name);
-    list.appendChild(item);
-  });
-  const issues = keyIssues.map((issue) => {
+    : `No keys folder · ${report.addons}`;
+  const issues = (report.keyIssues || []).map((issue) => {
     const line = document.createElement('p');
     line.className = 'sig-key-issue';
     line.textContent = issue;
     return line;
   });
-  signatureReport.append(summary, keys, ...issues, list);
-  signatureReport.hidden = false;
+  const list = document.createElement('ul');
+  appendSignatureRows(list, realSignatureProblems(report), options ? { onLink: options.onLink } : null);
+  const signed = report.pbos.filter((pbo) => pbo.status === 'signed');
+  if (signed.length && signed.length <= 12) {
+    appendSignatureRows(list, signed);
+  }
+  element.append(summary, keys, ...issues, list);
+  const prepacked = report.pbos.filter((pbo) => pbo.status === 'prepacked');
+  if (prepacked.length) {
+    const details = document.createElement('details');
+    details.className = 'sig-accordion';
+    const head = document.createElement('summary');
+    head.textContent = `${prepacked.length} PBOs keep a third-party key`;
+    head.title = 'These PBOs keep the author\'s bisign.';
+    const rows = document.createElement('ul');
+    appendSignatureRows(rows, prepacked, options);
+    details.append(head, rows);
+    element.append(details);
+  }
+  element.hidden = false;
+}
+
+function showSignatureReport(report) {
+  fillSignatureReport(signatureReport, report, {
+    onLink: (pbo) => linkWorkshopBisign(pbo)
+  });
+}
+
+function ownKeyForFolder(folder) {
+  return typeof ownKeyNameForFolder === 'function' ? ownKeyNameForFolder(folder) : '';
+}
+
+async function linkWorkshopBisign(pbo) {
+  const chosen = await window.updater.chooseFile('Bisign', pbo.file, 'bisign');
+  if (!chosen) {
+    return;
+  }
+  try {
+    await window.updater.attachBisign(pbo.file, chosen);
+    appendLog(`Linked a bisign to ${pbo.name}.`);
+    checkFolder();
+  } catch (error) {
+    appendLog(ipcMessage(error));
+  }
+}
+
+function logSignatureReport(report) {
+  const bad = realSignatureProblems(report);
+  if (!bad.length && report.prepacked) {
+    const key = report.ownKey ? ` with ${report.ownKey}` : '';
+    appendLog(`Signature check ${report.folder}: ${report.signed} signed${key}, ${report.prepacked} with their own keys.`);
+  } else {
+    appendLog(`Signature check ${report.folder}: ${report.signed} of ${report.total} PBOs signed.`);
+    bad.forEach((pbo) => {
+      appendLog(`  ${pbo.name}: ${signatureStates[pbo.status] || pbo.status}, ${signatureHelp[pbo.status] || ''}`);
+    });
+  }
+  (report.keyIssues || []).forEach((issue) => appendLog(`  ${issue}`));
 }
 
 function showSignatureError(message) {
@@ -405,7 +509,7 @@ async function checkFolder(options) {
   signatureCheck += 1;
   const ticket = signatureCheck;
   try {
-    const report = await window.updater.checkSignatures(typed);
+    const report = await window.updater.checkSignatures(typed, ownKeyForFolder(typed));
     if (ticket !== signatureCheck) {
       return report;
     }
@@ -418,11 +522,7 @@ async function checkFolder(options) {
       }
     }
     if (!quiet) {
-      appendLog(`Signature check ${report.folder}: ${report.signed} of ${report.total} PBOs signed.`);
-      (report.keyIssues || []).forEach((issue) => appendLog(`  ${issue}`));
-      report.pbos.filter((pbo) => pbo.status !== 'signed').forEach((pbo) => {
-        appendLog(`  ${pbo.name}: ${signatureStates[pbo.status] || pbo.status}, ${signatureHelp[pbo.status] || ''}`);
-      });
+      logSignatureReport(report);
     }
     return report;
   } catch (error) {
@@ -605,8 +705,11 @@ function applyImported(rows) {
         mod.displayName = row.title;
       }
     }
-    if (row.contentFolder && !mod.contentFolder) {
+    if (row.contentFolder && (row.status === 'updated' || row.status === 'copied' || !mod.contentFolder)) {
       mod.contentFolder = row.contentFolder;
+    }
+    if (row.status === 'updated' && row.modCpp) {
+      mod.modCpp = { ...mod.modCpp, ...row.modCpp };
     }
     if (row.previewImage) {
       mod.workshop.previewImage = row.previewImage;
@@ -628,8 +731,9 @@ function applyImported(rows) {
         mod.modCpp[key] = row.modCpp[key];
       }
     });
-    const where = row.contentFolder ? ` ${row.contentFolder}` : '';
-    appendLog(`${row.title || row.publishedId}: ${row.status}.${where}`);
+    const where = row.detail ? ` ${row.detail}.` : '';
+    const folder = row.contentFolder && row.status !== 'unchanged' ? ` ${row.contentFolder}` : '';
+    appendLog(`${row.title || row.publishedId}: ${row.status}.${where}${folder}`);
     selectedId = mod.id;
   });
   if (!selected() && mods.length) {
@@ -667,6 +771,7 @@ function applyLock(mod) {
   });
   document.querySelector('#push-mod').disabled = busy || locked;
   document.querySelector('#save-mod').disabled = busy || locked;
+  document.querySelector('#repull-mod').disabled = busy || locked || !/^\d+$/.test(String(mod && mod.workshop.publishedId || '').trim());
   document.querySelector('#content-folder-browse').disabled = busy || locked;
   document.querySelector('#change-note-template').disabled = busy || locked;
   document.querySelector('#read-mod-files').disabled = busy || locked;
@@ -956,7 +1061,7 @@ async function preparePush(mod) {
     report = await checkFolder();
   } else {
     try {
-      report = await window.updater.checkSignatures(mod.contentFolder);
+      report = await window.updater.checkSignatures(mod.contentFolder, ownKeyForFolder(mod.contentFolder));
     } catch (error) {
       appendLog(`${mod.displayName}: ${ipcMessage(error)}`);
     }
@@ -1367,6 +1472,43 @@ function hideSplash() {
   splash.hidden = true;
 }
 
+document.querySelector('#repull-mod').addEventListener('click', async () => {
+  const mod = selected();
+  const id = mod ? String(mod.workshop.publishedId || '').trim() : '';
+  if (!mod || !/^\d+$/.test(id) || busy) {
+    return;
+  }
+  pulling = true;
+  clearTimeout(splashIdle);
+  setBusy(true);
+  showSplash('Checking mod');
+  appendLog(`Re-pull ${mod.displayName || id}. Comparing MOD_DATA\\${id} with the workshop download.`);
+  try {
+    const result = await window.updater.repull(id, mod.workshop.title || mod.displayName || '');
+    if (!result.ok) {
+      const message = result.error || 'Re-pull failed.';
+      appendLog(message);
+      splashProgress(message);
+      return;
+    }
+    applyImported(result.imported);
+    const row = result.imported[0];
+    const line = row.status === 'unchanged'
+      ? `${mod.displayName || id} already matches the workshop download.`
+      : `${mod.displayName || id}: ${row.detail || row.status}.`;
+    splashProgress(line);
+    await persist();
+    await loadLibrary();
+  } catch (error) {
+    appendLog(error.message);
+    splashProgress(error.message);
+  } finally {
+    pulling = false;
+    setBusy(false);
+    window.setTimeout(hideSplash, 900);
+  }
+});
+
 document.querySelector('#pull-all').addEventListener('click', async () => {
   pulling = true;
   clearTimeout(splashIdle);
@@ -1382,8 +1524,10 @@ document.querySelector('#pull-all').addEventListener('click', async () => {
       return;
     }
     applyImported(result.imported);
-    const added = (result.imported || []).filter((item) => item.status === 'copied' || item.status === 'kept').length;
-    const summary = `Pulled ${added} mods into the library.`;
+    const rows = result.imported || [];
+    const updated = rows.filter((item) => item.status === 'copied' || item.status === 'updated').length;
+    const same = rows.filter((item) => item.status === 'unchanged' || item.status === 'kept').length;
+    const summary = `Checked ${rows.length} mods. ${updated} updated, ${same} already in sync.`;
     appendLog(summary);
     splashProgress(summary);
     await persist();
@@ -1526,6 +1670,10 @@ document.addEventListener('keydown', (event) => {
       settingsModal.hidden = true;
     } else if (!document.querySelector('#pack-save-modal').hidden) {
       document.querySelector('#pack-save-cancel').click();
+    } else if (!document.querySelector('#pack-row-modal').hidden) {
+      document.querySelector('#pack-row-cancel').click();
+    } else if (!document.querySelector('#pack-mode-modal').hidden) {
+      document.querySelector('#pack-mode-cancel').click();
     } else if (!document.querySelector('#pack-delete-modal').hidden) {
       document.querySelector('#pack-delete-cancel').click();
     }
@@ -1907,9 +2055,13 @@ document.querySelector('#settings-form').addEventListener('submit', async (event
     });
     settingsModal.hidden = true;
     appendLog(`Data folder ${saved.dataFolder}`);
+    appendLog(`Library file ${saved.libraryFile}`);
     appendLog(`Steam folder ${saved.steamDir}`);
     appendLog(`DayZ Publisher ${saved.publisherDir}`);
     await loadLibrary();
+    if (typeof loadPackTemplates === 'function') {
+      await loadPackTemplates();
+    }
   } catch (error) {
     appendLog(error.message);
   }
