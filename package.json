@@ -9,9 +9,9 @@
     "prestart": "dotnet build steam-helper/SteamHelper.csproj -c Release",
     "start": "electron .",
     "helper": "dotnet build steam-helper/SteamHelper.csproj -c Release",
-    "dist": "npm run helper && electron-builder --win nsis portable --publish never",
+    "dist": "npm run helper && electron-builder --win nsis nsis-web portable --publish never",
     "dist:setup": "npm run helper && electron-builder --win nsis --publish never",
-    "release": "npm run helper && electron-builder --win nsis portable --publish always"
+    "release": "npm run helper && electron-builder --win nsis nsis-web portable --publish always"
   },
   "devDependencies": {
     "electron": "^44.9.3",
@@ -42,6 +42,7 @@
     "win": {
       "target": [
         "nsis",
+        "nsis-web",
         "portable"
       ]
     },
@@ -57,6 +58,9 @@
       "license": "LICENSE",
       "artifactName": "Steam Updater Setup ${version}.exe",
       "differentialPackage": false
+    },
+    "nsisWeb": {
+      "artifactName": "Steam Updater Web Setup ${version}.exe"
     },
     "portable": {
       "artifactName": "Steam Updater.exe"
