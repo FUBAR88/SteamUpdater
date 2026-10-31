@@ -394,6 +394,7 @@ app.whenReady().then(() => {
     return shell.openExternal(target);
   });
   ipcMain.handle('files:write', (_event, mod) => files.writeModFiles(mod));
+  ipcMain.handle('files:read', (_event, folder) => files.readModFiles(folder));
   ipcMain.handle('files:mod-image-path', (_event, file, folder) => files.modImagePath(file, folder));
   ipcMain.handle('files:signatures', (_event, folder) => files.checkSignatures(folder));
   ipcMain.handle('files:folder-of', (_event, target) => files.folderOf(target));

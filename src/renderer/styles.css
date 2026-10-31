@@ -531,6 +531,10 @@ input[readonly] { color: var(--muted); }
 .signature-report .sig-key-issue { margin: 0 0 6px; color: var(--danger); }
 
 .change-note { display: flex; flex-direction: column; gap: 6px; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.panel-head h2 { margin: 0; }
+.panel-head button.icon { width: 30px; height: 30px; }
+
 .note-head { display: flex; align-items: center; gap: 8px; }
 .note-head label { flex: 1; }
 .note-head select { width: auto; max-width: 280px; padding: 4px 8px; font-size: 12px; }

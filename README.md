@@ -93,6 +93,16 @@ It also looks at `keys\` itself: more than one `.bikey`, or a `.bikey` that sign
 
 The check compares the public key stored in each `.bisign` with the one in each `.bikey`. It does not recompute the signature hashes. Push runs the check again and asks before it uploads when a PBO is not signed correctly or `keys\` needs a look.
 
+## Reading mod.cpp and meta.cpp
+
+Save writes the mod.cpp fields into `mod.cpp` and a fresh `meta.cpp` in the content folder. The arrows next to the **mod.cpp** heading go the other way: they read both files from the content folder (or the mod folder above an `addons` folder) and put their values into the form.
+
+- Every mod.cpp field takes the value from the file. A field the file does not have becomes empty, so the form matches the file.
+- Keys match in any case (`authorId` counts as `authorID`), `\"` and `""` inside a value are read as a quote, and image paths keep their backslashes.
+- `meta.cpp` fills **name** only when mod.cpp has none, and the published file id only when the mod has none yet. A different id in `meta.cpp` is reported in the log and not taken over.
+
+The values land in the app's library. The files themselves are not changed until you press Save.
+
 ## Packing
 
 The **Pack** tab in the title bar packs your source folders into PBOs and writes them straight into a mod folder, so nothing has to be copied into `MOD_DATA` by hand. It uses AddonBuilder from DayZ Tools.

@@ -669,6 +669,7 @@ function applyLock(mod) {
   document.querySelector('#save-mod').disabled = busy || locked;
   document.querySelector('#content-folder-browse').disabled = busy || locked;
   document.querySelector('#change-note-template').disabled = busy || locked;
+  document.querySelector('#read-mod-files').disabled = busy || locked;
   document.querySelectorAll('[data-image-browse]').forEach((button) => {
     button.disabled = busy || locked;
   });
@@ -757,6 +758,61 @@ document.querySelector('#save-mod').addEventListener('click', () => {
       appendLog(`Wrote ${written.metaPath}`);
     })
     .catch((error) => appendLog(error.message));
+});
+
+const MOD_CPP_KEYS = ['name', 'version', 'author', 'authorID', 'tooltip', 'overview', 'action', 'picture', 'logo', 'logoSmall', 'logoOver'];
+
+// The other way round from Save: mod.cpp and meta.cpp in the content folder fill the form.
+document.querySelector('#read-mod-files').addEventListener('click', async () => {
+  const mod = selected();
+  if (!mod || mod.locked) {
+    return;
+  }
+  readForm(mod);
+  if (!mod.contentFolder) {
+    appendLog('Choose a content folder to read mod.cpp and meta.cpp from.');
+    return;
+  }
+  let found;
+  try {
+    found = await window.updater.readFiles(mod.contentFolder);
+  } catch (error) {
+    appendLog(ipcMessage(error));
+    return;
+  }
+  const changed = [];
+  if (found.modCpp) {
+    MOD_CPP_KEYS.forEach((key) => {
+      const value = found.modCpp[key] || '';
+      if (fields[key].value !== value) {
+        fields[key].value = value;
+        changed.push(key);
+      }
+    });
+  }
+  if (found.meta) {
+    // meta.cpp only carries the name when mod.cpp has none.
+    if (!fields.name.value && found.meta.name) {
+      fields.name.value = found.meta.name;
+      changed.push('name');
+    }
+    const id = found.meta.publishedId;
+    if (id && !mod.workshop.publishedId) {
+      mod.workshop.publishedId = id;
+      fields.publishedId.value = id;
+      changed.push('published file id');
+    } else if (id && id !== String(mod.workshop.publishedId)) {
+      appendLog(`meta.cpp names published file id ${id}, this mod has ${mod.workshop.publishedId}. Kept ${mod.workshop.publishedId}.`);
+    }
+  }
+  [found.modPath, found.metaPath].filter(Boolean).forEach((file) => appendLog(`Read ${file}`));
+  if (!found.modPath) {
+    appendLog(`No mod.cpp in ${found.folder}, only meta.cpp.`);
+  }
+  appendLog(changed.length ? `Took over from the files: ${changed.join(', ')}.` : 'The form already matches the files.');
+  if (changed.length) {
+    queueSave();
+  }
 });
 
 document.querySelector('#duplicate-mod').addEventListener('click', () => {

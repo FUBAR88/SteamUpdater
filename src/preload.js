@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld('updater', {
   writeFiles(mod) {
     return ipcRenderer.invoke('files:write', mod);
   },
+  readFiles(folder) {
+    return ipcRenderer.invoke('files:read', folder);
+  },
   checkSignatures(folder) {
     return ipcRenderer.invoke('files:signatures', folder);
   },

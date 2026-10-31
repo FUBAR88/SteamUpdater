@@ -65,7 +65,7 @@ function writeModCpp(modPath, values) {
     fs.writeFileSync(modPath, `${lines.join(os.EOL)}${os.EOL}`, 'utf8');
     return true;
   }
-  const original = fs.readFileSync(modPath, 'utf8');
+  const original = readCppText(modPath);
   const eol = original.includes('\r\n') ? '\r\n' : '\n';
   let text = original;
   MOD_FIELDS.forEach((key) => {
@@ -74,7 +74,7 @@ function writeModCpp(modPath, values) {
       return;
     }
     const line = `${key} = "${escapeQuoted(wanted)}";`;
-    const pattern = new RegExp(`^[ \\t]*${escapeRegExp(key)}[ \\t]*=.*$`, 'm');
+    const pattern = new RegExp(`^[ \\t]*${escapeRegExp(key)}[ \\t]*=.*$`, 'mi');
     if (pattern.test(text)) {
       text = text.replace(pattern, line);
     } else if (wanted) {
@@ -88,12 +88,38 @@ function writeModCpp(modPath, values) {
   return true;
 }
 
-// Same matching as workshop.readCppValue, which filled the form on import.
+// Image paths keep their backslashes, so \n there is a folder, not a line break.
+const PATH_FIELDS = ['picture', 'logo', 'logoSmall', 'logoOver'];
+
+// Undoes escapeQuoted, and the doubled quote a hand-written config uses.
+function unescapeQuoted(value, key) {
+  return value.replace(/""|\\(["\\n])/g, (match, escaped) => {
+    if (match === '""') {
+      return '"';
+    }
+    if (escaped === 'n') {
+      return PATH_FIELDS.includes(key) ? match : '\n';
+    }
+    return escaped;
+  });
+}
+
+// Same matching as workshop.readCppValue, which filled the form on import, but
+// keys match in any case and escaped quotes stay inside the value.
 function readFromText(text, key) {
-  const quoted = new RegExp(`^\\s*${key}\\s*=\\s*"([^"]*)"\\s*;`, 'm');
-  const bare = new RegExp(`^\\s*${key}\\s*=\\s*([^;]+);`, 'm');
-  const match = text.match(quoted) || text.match(bare);
-  return match ? match[1].trim() : '';
+  const name = escapeRegExp(key);
+  const quoted = new RegExp(`^\\s*${name}\\s*=\\s*"((?:[^"\\\\]|\\\\.|"")*)"\\s*;`, 'mi');
+  const bare = new RegExp(`^\\s*${name}\\s*=\\s*([^;"]+);`, 'mi');
+  const match = text.match(quoted);
+  if (match) {
+    return unescapeQuoted(match[1], key).trim();
+  }
+  const plain = text.match(bare);
+  return plain ? plain[1].trim() : '';
+}
+
+function readCppText(file) {
+  return fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
 }
 
 function findPrivateKeys(folder) {
@@ -297,6 +323,44 @@ function writeModFiles(mod, options) {
   return { folder, modPath: modChanged ? modPath : '', metaPath };
 }
 
+// Reads mod.cpp and meta.cpp back from the content folder, where Save writes them.
+// A key missing from mod.cpp comes back empty, so the form matches the file.
+function readModFiles(input) {
+  const folder = cleanFolderInput(input);
+  if (!folder) {
+    throw new Error('Choose a content folder first.');
+  }
+  if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) {
+    throw new Error(`Folder not found: ${folder}`);
+  }
+  const base = [folder, locateModParts(folder).root].find((dir) => fs.existsSync(path.join(dir, 'mod.cpp'))
+    || fs.existsSync(path.join(dir, 'meta.cpp')));
+  if (!base) {
+    throw new Error(`No mod.cpp or meta.cpp in ${folder}.`);
+  }
+  const result = { folder: base, modPath: '', metaPath: '', modCpp: null, meta: null };
+  const modPath = path.join(base, 'mod.cpp');
+  if (fs.existsSync(modPath)) {
+    const text = readCppText(modPath);
+    result.modPath = modPath;
+    result.modCpp = {};
+    MOD_FIELDS.forEach((key) => {
+      result.modCpp[key] = readFromText(text, key);
+    });
+  }
+  const metaPath = path.join(base, 'meta.cpp');
+  if (fs.existsSync(metaPath)) {
+    const text = readCppText(metaPath);
+    const publishedId = readFromText(text, 'publishedid');
+    result.metaPath = metaPath;
+    result.meta = {
+      name: readFromText(text, 'name'),
+      publishedId: /^\d+$/.test(publishedId) && publishedId !== '0' ? publishedId : ''
+    };
+  }
+  return result;
+}
+
 // Reads the prefix from a $PBOPREFIX$ file: a bare path or "prefix=path".
 function readPboPrefix(file) {
   const line = fs.readFileSync(file, 'utf8').split(/\r?\n/).map((text) => text.trim()).find(Boolean) || '';
@@ -353,5 +417,6 @@ module.exports = {
   metaName,
   modImagePath,
   publishedIdOrZero,
+  readModFiles,
   writeModFiles
 };

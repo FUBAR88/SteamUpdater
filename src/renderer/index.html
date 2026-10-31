@@ -188,8 +188,13 @@
         </section>
 
         <section class="panel">
-          <h2>mod.cpp</h2>
-          <p class="hint">DayZ reads mod.cpp from the mod folder and shows it in the launcher and the in-game mods list. Only name is really needed. Fields you leave empty are not added to the file.</p>
+          <div class="panel-head">
+            <h2>mod.cpp</h2>
+            <button id="read-mod-files" class="icon" type="button" title="Read mod.cpp and meta.cpp from the content folder" aria-label="Read mod.cpp and meta.cpp from the content folder">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4V1L8 5l4 4V6a6 6 0 0 1 6 6 5.9 5.9 0 0 1-.7 2.8l1.5 1.5A8 8 0 0 0 12 4zm0 14a6 6 0 0 1-6-6 5.9 5.9 0 0 1 .7-2.8L5.2 7.7A8 8 0 0 0 12 20v3l4-4-4-4v3z"/></svg>
+            </button>
+          </div>
+          <p class="hint">DayZ reads mod.cpp from the mod folder and shows it in the launcher and the in-game mods list. Only name is really needed. Fields you leave empty are not added to the file. The arrows read mod.cpp and meta.cpp from the content folder into the form.</p>
           <div class="grid">
             <label><span class="label-line">name</span><input id="mod-name" type="text" autocomplete="off" placeholder="e.g. My Mod"><span class="field-hint">Mod name in the DayZ launcher and the in-game mods list.</span></label>
             <label><span class="label-line">version</span><input id="mod-version" type="text" autocomplete="off" placeholder="e.g. 1.0.0"><span class="field-hint">Version shown next to the name.</span></label>
