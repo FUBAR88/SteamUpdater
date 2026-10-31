@@ -1,6 +1,6 @@
 {
   "name": "steam-updater",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Manage DayZ mods and upload them to the Steam Workshop as the owner or a contributor.",
   "main": "src/main.js",
   "author": "Fubar",
