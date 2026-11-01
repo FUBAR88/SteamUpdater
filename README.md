@@ -1,6 +1,6 @@
 # Steam Updater
 
-Credit for this app: Fubar · [Fubar's Hideout](https://discord.gg/FJa82GVfEa)
+Credit for this app: Fubar & Psyern · [Fubar's Hideout](https://discord.gg/FJa82GVfEa)
 
 A Windows app for DayZ modders: it packs and signs PBOs, keeps mod.cpp and meta.cpp, previews the workshop description the way Steam shows it, and pushes mods to the Steam Workshop, also as a **contributor** on an item someone else created.
 
