@@ -34,6 +34,10 @@ The button with the version number in the title bar asks GitHub for the newest r
 
 The download is checked against its size and the SHA-256 checksum GitHub lists for it.
 
+## Command line
+
+An installed copy has `steam-updater-cli.cmd` next to `Steam Updater.exe`. It packs, signs, checks and pushes without the window, with the same templates and mods. `steam-updater-cli help` lists the commands.
+
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE). Copyright Fubar.
